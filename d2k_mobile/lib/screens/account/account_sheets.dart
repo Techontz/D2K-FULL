@@ -197,7 +197,7 @@ Future<void> showPaymentSheet(BuildContext context) {
     (Icons.smartphone, 'Tigo Pesa', 'Instant mobile money'),
     (Icons.smartphone, 'Airtel Money', 'Instant mobile money'),
     (Icons.credit_card, 'Card', 'Visa / Mastercard'),
-    (Icons.payments_outlined, 'Cash on delivery', 'Pay the rider on arrival'),
+    (Icons.payments_outlined, 'Lipa Namba', 'Pay the seller on their own number'),
   ];
   return showModalBottomSheet<void>(
     context: context,

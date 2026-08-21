@@ -5,7 +5,8 @@ import type { Dictionary } from "./en";
  *
  * Wording follows how Tanzanian shoppers actually speak about buying online
  * rather than a literal rendering of the English: "Ongeza kwenye kikapu"
- * (basket), "Lipa ukipokea" for cash on delivery, "Bidhaa" for products.
+ * (basket), "Lipa Namba" kept verbatim because that is what is printed on the
+ * tills themselves, "Bidhaa" for products.
  */
 export const sw: Dictionary = {
   language: {
