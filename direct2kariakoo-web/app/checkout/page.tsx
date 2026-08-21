@@ -55,7 +55,10 @@ function CheckoutContent() {
   // seller's till number — comes from the server. The storefront deliberately
   // holds no copy of the pricing rules to fall out of step with the backend.
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
+  // Which kind of failure, not just "something went wrong": a server that does
+  // not yet have the pricing endpoint is a different problem, with a different
+  // answer for the shopper, than a dropped connection.
+  const [previewFailed, setPreviewFailed] = useState<null | "outdated" | "network">(null);
 
   // The destination pin, when the shopper has one. Delivery is priced from it;
   // an address typed without a pin leaves the fee pending rather than free.
@@ -149,14 +152,20 @@ function CheckoutContent() {
       .then((result) => {
         if (cancelled) return;
         setPreview(result);
-        setPreviewFailed(false);
+        setPreviewFailed(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
+
         // Without the server's answer we do not know who to pay, so the page
-        // says so rather than inventing a total or a number.
+        // says so rather than inventing a total or a number. What it says
+        // depends on why: a 404 or 405 here means this build of the site is
+        // newer than the API it is talking to, which no amount of retrying by
+        // the shopper will fix, so it must not be dressed up as a glitch.
+        const status = (error as { response?: { status?: number } })?.response?.status;
+
         setPreview(null);
-        setPreviewFailed(true);
+        setPreviewFailed(status === 404 || status === 405 ? "outdated" : "network");
       });
 
     return () => {
@@ -529,9 +538,11 @@ function CheckoutContent() {
             {previewFailed ? (
               <p
                 role="alert"
-                className="mt-3 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] text-[color:var(--color-sale)]"
+                className="mt-3 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--color-sale)]"
               >
-                {t("checkout.pricingUnavailable")}
+                {previewFailed === "outdated"
+                  ? t("checkout.paymentSetupUpdating")
+                  : t("checkout.pricingUnavailable")}
               </p>
             ) : null}
 

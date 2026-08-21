@@ -226,6 +226,7 @@ export const zh: Dictionary = {
   },
 
   checkout: {
+    paymentSetupUpdating: "结算功能正在更新，几分钟内无法接受订单。您的购物车已保存——请稍后重试。",
     nothingPayable: "您购物车中的卖家目前都无法收款。请移除其商品或稍后再试。",
     title: "结算",
     deliveryDetails: "配送信息",

@@ -12,6 +12,7 @@ use App\Support\LipaNamba;
 use App\Support\Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -64,8 +65,12 @@ class OrderController extends Controller
         $user      = $request->user();
         $reference = $this->newReference();
 
+        // Asked once rather than per line: a schema lookup is not free and a
+        // fifty-item basket should not make fifty of them.
+        $hasSnapshotColumn = Schema::hasColumn('orders', 'lipa_namba');
+
         try {
-            $result = DB::transaction(function () use ($data, $user, $reference) {
+            $result = DB::transaction(function () use ($data, $user, $reference, $hasSnapshotColumn) {
                 $subtotal = 0;
                 $lines    = [];
 
@@ -104,7 +109,7 @@ class OrderController extends Controller
                     $lineTotal = (float) $product->new_price * $item['quantity'];
                     $subtotal += $lineTotal;
 
-                    $lines[] = Order::create([
+                    $line = [
                         'reference'        => $reference,
                         'user_id'          => $user->id,
                         'vendor_id'        => $product->vendor_id,
@@ -116,14 +121,25 @@ class OrderController extends Controller
                         'payment_method'   => $data['payment_method'],
                         'payment_provider' => $data['payment_provider'] ?? null,
 
-                        // Copied, not referenced. When this seller changes
-                        // their till number next month, this order still shows
-                        // the number the customer was actually told to pay.
-                        'lipa_namba'       => LipaNamba::normalise($vendor->lipa_namba),
                         'delivery_address' => $data['delivery_address'],
                         'customer_phone'   => $data['customer_phone'],
                         'external_id'      => (string) Str::uuid(),
-                    ]);
+                    ];
+
+                    // Copied, not referenced. When this seller changes their
+                    // till number next month, this order still shows the number
+                    // the customer was actually told to pay.
+                    //
+                    // Guarded because a server can have these files before it
+                    // has run the migration. Writing a column that is not there
+                    // fails the whole insert, and nobody could buy anything
+                    // until someone noticed — losing the snapshot costs far
+                    // less than losing every sale.
+                    if ($hasSnapshotColumn) {
+                        $line['lipa_namba'] = $vendor->resolveLipaNamba();
+                    }
+
+                    $lines[] = Order::create($line);
 
                     // Reserve the stock that was just sold.
                     $product->decrement('stock', $item['quantity']);
@@ -302,8 +318,13 @@ class OrderController extends Controller
         return $lines
             ->groupBy('vendor_id')
             ->map(function ($vendorLines) {
-                $first  = $vendorLines->first();
-                $stored = $first->lipa_namba;
+                $first = $vendorLines->first();
+
+                // Null where the column does not exist. Deliberately not
+                // falling back to the vendor's current number: that would print
+                // today's till on an order placed before it changed, which is
+                // the exact confusion the snapshot exists to prevent.
+                $stored = Schema::hasColumn('orders', 'lipa_namba') ? $first->lipa_namba : null;
 
                 return [
                     'vendor_id'          => (int) $first->vendor_id,

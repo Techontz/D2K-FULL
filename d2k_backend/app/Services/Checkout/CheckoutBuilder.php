@@ -171,9 +171,12 @@ class CheckoutBuilder
         // Only ever this vendor's own number, and only when it is real. A
         // group that cannot be paid reports null rather than an empty string,
         // so no caller can mistake "not set up" for "pay into nothing".
-        $lipaNamba = $vendor && $vendor->hasLipaNamba()
-            ? LipaNamba::normalise($vendor->lipa_namba)
-            : null;
+        //
+        // resolveLipaNamba(), not the raw column: a seller who filed their
+        // till under the older payment-options table is still payable, and on
+        // a database where the column has not been added yet that table is the
+        // only place it can be.
+        $lipaNamba = $vendor?->resolveLipaNamba();
 
         return [
             'vendor_id'          => $vendor?->id,

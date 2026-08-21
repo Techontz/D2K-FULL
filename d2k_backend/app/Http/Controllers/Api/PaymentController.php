@@ -358,10 +358,8 @@ class PaymentController extends Controller
                         // This seller's own till, and only ever theirs. Null
                         // when they have not set one up — never blank, and
                         // never borrowed from another vendor in the basket.
-                        'lipa_namba' => $vendor->hasLipaNamba()
-                            ? \App\Support\LipaNamba::normalise($vendor->lipa_namba)
-                            : null,
-                        'lipa_namba_display' => \App\Support\LipaNamba::pretty($vendor->lipa_namba),
+                        'lipa_namba' => $vendor->resolveLipaNamba(),
+                        'lipa_namba_display' => \App\Support\LipaNamba::pretty($vendor->resolveLipaNamba()),
                         'can_accept_orders' => $vendor->canAcceptOrders(),
 
                         'payment_options' => $paymentOptions,

@@ -227,6 +227,7 @@ export const fr: Dictionary = {
   },
 
   checkout: {
+    paymentSetupUpdating: "Le paiement est en cours de mise à jour et ne peut pas accepter de commandes pendant quelques minutes. Votre panier est conservé — réessayez dans un instant.",
     nothingPayable: "Aucun vendeur de votre panier ne peut encore encaisser. Retirez leurs articles ou réessayez plus tard.",
     title: "Commande",
     deliveryDetails: "Informations de livraison",

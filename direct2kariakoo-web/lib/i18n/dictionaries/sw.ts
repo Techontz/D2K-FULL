@@ -234,6 +234,7 @@ export const sw: Dictionary = {
   },
 
   checkout: {
+    paymentSetupUpdating: "Mfumo wa malipo unasasishwa na hauwezi kupokea oda kwa dakika chache. Kikapu chako kimehifadhiwa — tafadhali jaribu tena hivi punde.",
     nothingPayable: "Hakuna muuzaji kwenye kikapu chako anayeweza kupokea malipo kwa sasa. Tafadhali ondoa bidhaa zake au jaribu tena baadaye.",
     title: "Malipo",
     deliveryDetails: "Taarifa za usafirishaji",

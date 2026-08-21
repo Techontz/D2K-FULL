@@ -234,6 +234,7 @@ export const en = {
   },
 
   checkout: {
+    paymentSetupUpdating: "Checkout is being updated and cannot take orders for a few minutes. Your basket is saved — please try again shortly.",
     nothingPayable: "None of the sellers in your basket can take payment yet. Please remove their items or try again later.",
     title: "Checkout",
     deliveryDetails: "Delivery details",

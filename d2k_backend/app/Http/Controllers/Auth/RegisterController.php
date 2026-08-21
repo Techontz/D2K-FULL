@@ -204,20 +204,16 @@ class RegisterController extends Controller
         if ($request->has('lipa_namba')) {
             $raw = trim((string) $request->input('lipa_namba'));
 
-            if ($raw === '') {
-                $vendor->lipa_namba = null;
-            } else {
-                $normalised = \App\Support\LipaNamba::normalise($raw);
+            $normalised = $raw === '' ? null : \App\Support\LipaNamba::normalise($raw);
 
-                if ($normalised === null) {
-                    return response()->json([
-                        'message' => 'That does not look like a Lipa Namba.',
-                        'errors'  => ['lipa_namba' => ['Enter the digits of your Lipa Namba, no letters.']],
-                    ], 422);
-                }
-
-                $vendor->lipa_namba = $normalised;
+            if ($raw !== '' && $normalised === null) {
+                return response()->json([
+                    'message' => 'That does not look like a Lipa Namba.',
+                    'errors'  => ['lipa_namba' => ['Enter the digits of your Lipa Namba, no letters.']],
+                ], 422);
             }
+
+            $vendor->storeLipaNamba($normalised);
         }
 
         if ($request->hasFile('logo')) {

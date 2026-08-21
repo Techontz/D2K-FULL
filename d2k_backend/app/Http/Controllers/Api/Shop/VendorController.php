@@ -58,8 +58,8 @@ class VendorController extends Controller
                 // Customers pay this store on its own Lipa Namba, so a store
                 // without one cannot be checked out. The console surfaces that
                 // rather than letting the seller wonder why orders stopped.
-                'lipa_namba'         => $vendor->lipa_namba,
-                'lipa_namba_display' => \App\Support\LipaNamba::pretty($vendor->lipa_namba),
+                'lipa_namba'         => $vendor->resolveLipaNamba(),
+                'lipa_namba_display' => \App\Support\LipaNamba::pretty($vendor->resolveLipaNamba()),
                 'has_lipa_namba'     => $vendor->hasLipaNamba(),
                 'can_accept_orders'  => $vendor->canAcceptOrders(),
             ],

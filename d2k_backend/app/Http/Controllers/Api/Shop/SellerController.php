@@ -63,8 +63,8 @@ class SellerController extends Controller
                 // the flag the console acts on: without a Lipa Namba the
                 // store's items cannot be checked out, so the seller is told
                 // plainly rather than losing sales without knowing why.
-                'lipa_namba'         => $vendor->lipa_namba,
-                'lipa_namba_display' => LipaNamba::pretty($vendor->lipa_namba),
+                'lipa_namba'         => $vendor->resolveLipaNamba(),
+                'lipa_namba_display' => LipaNamba::pretty($vendor->resolveLipaNamba()),
                 'has_lipa_namba'     => $vendor->hasLipaNamba(),
                 'can_accept_orders'  => $vendor->canAcceptOrders(),
 
@@ -151,6 +151,12 @@ class SellerController extends Controller
                 // seller's own console all show the same digits.
                 $data['lipa_namba'] = $normalised;
             }
+
+            // Written through the model, which knows which of the two places
+            // this database can actually hold it, then dropped from the mass
+            // update so a missing column cannot break the rest of the profile.
+            $vendor->storeLipaNamba($data['lipa_namba']);
+            unset($data['lipa_namba']);
         }
 
         if ($request->hasFile('logo')) {

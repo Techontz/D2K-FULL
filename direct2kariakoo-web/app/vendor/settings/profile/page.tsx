@@ -73,6 +73,7 @@ export default function VendorProfilePage() {
 
     fetchProfile();
     fetchPaymentTypes();
+    fetchLipaNamba();
 
     const interval = setInterval(fetchProfile, 60000);
     return () => clearInterval(interval);
@@ -83,7 +84,6 @@ export default function VendorProfilePage() {
     setVendor(data.vendor);
     setPhone(data.vendor?.phone || "");
     setLocation(data.vendor?.business_address || "");
-    setLipaNamba(data.vendor?.lipa_namba || "");
     setPaymentOptions(data.paymentOptions || []);
   }
 
@@ -177,7 +177,28 @@ export default function VendorProfilePage() {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* 🏦 Save Lipa Namba                                                         */
+  /* 🏦 Lipa Namba                                                              */
+  /* -------------------------------------------------------------------------- */
+  /**
+   * Read from the seller-status endpoint, not from `/me`.
+   *
+   * `/me` hands back the raw vendor row. Where the till is filed under the
+   * older payment-options table — which is the case on any database that has
+   * not had the dedicated column added — that row simply has no number on it,
+   * and reading from there blanked the field the seller had just filled in.
+   * The status endpoint resolves whichever of the two places holds it.
+   */
+  async function fetchLipaNamba() {
+    try {
+      const res = await api.get("/shop/seller/status");
+      setLipaNamba(res.data?.store?.lipa_namba || "");
+    } catch {
+      // Leave whatever is in the field; the seller can still save.
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /* 💾 Save Lipa Namba                                                         */
   /* -------------------------------------------------------------------------- */
   /**
    * Saved through the seller-store endpoint, which validates the number
@@ -197,6 +218,8 @@ export default function VendorProfilePage() {
       // seller sees exactly what a customer will be shown.
       setLipaNamba(res.data?.store?.lipa_namba || "");
       setLipaNambaSaved(true);
+      // Refreshes name/phone/logo. It no longer touches the till number, so it
+      // cannot overwrite what was just saved.
       fetchProfile();
     } catch (err: any) {
       setLipaNambaError(
