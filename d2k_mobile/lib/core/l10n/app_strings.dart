@@ -90,7 +90,7 @@ class AppStrings {
   String get noAddresses => _t('noAddresses');
   String get addAddress => _t('addAddress');
   String get deliverHere => _t('deliverHere');
-  String get cashOnDelivery => _t('cashOnDelivery');
+  String get lipaNamba => _t('lipaNamba');
   String get comingSoon => _t('comingSoon');
   String get placeOrder => _t('placeOrder');
   String get orderPlaced => _t('orderPlaced');
@@ -157,7 +157,7 @@ class AppStrings {
   String get bestSeller => _t('bestSeller');
   String get sellingOutFast => _t('sellingOutFast');
   String get freeReturns => _t('freeReturns');
-  String get freeShippingAbove => _t('freeShippingAbove');
+  String get deliveryByDistance => _t('deliveryByDistance');
   String get secureTransaction => _t('secureTransaction');
   String get highRatedSeller => _t('highRatedSeller');
 
@@ -169,6 +169,7 @@ class AppStrings {
   String get orderSummary => _t('orderSummary');
   String get subtotal => _t('subtotal');
   String get deliveryFee => _t('deliveryFee');
+  String get deliveryPending => _t('deliveryPending');
   String get discountLabel => _t('discountLabel');
   String get total => _t('total');
   String get checkout => _t('checkout');
@@ -244,7 +245,7 @@ class AppStrings {
       'noAddresses': 'No saved addresses',
       'addAddress': 'Add address',
       'deliverHere': 'Deliver here',
-      'cashOnDelivery': 'Cash on delivery',
+      'lipaNamba': 'Lipa Namba',
       'comingSoon': 'Coming soon',
       'placeOrder': 'Place order',
       'orderPlaced': 'Order placed',
@@ -306,7 +307,7 @@ class AppStrings {
       'bestSeller': 'Best Seller',
       'sellingOutFast': 'Selling out fast',
       'freeReturns': 'Easy and hassle free returns',
-      'freeShippingAbove': 'Free shipping on orders above',
+      'deliveryByDistance': 'Delivery priced by distance to you',
       'secureTransaction': 'Secure Transaction',
       'highRatedSeller': 'High Rated Seller',
       'cartEmptyTitle': 'Your shopping cart looks empty.',
@@ -316,6 +317,7 @@ class AppStrings {
       'orderSummary': 'Order summary',
       'subtotal': 'Subtotal',
       'deliveryFee': 'Delivery fee',
+      'deliveryPending': 'Calculated by distance',
       'discountLabel': 'Discount',
       'total': 'Total',
       'checkout': 'Checkout',
@@ -382,7 +384,7 @@ class AppStrings {
       'noAddresses': 'Hakuna anwani zilizohifadhiwa',
       'addAddress': 'Ongeza anwani',
       'deliverHere': 'Leta hapa',
-      'cashOnDelivery': 'Lipa ukipokea',
+      'lipaNamba': 'Lipa Namba',
       'comingSoon': 'Inakuja hivi karibuni',
       'placeOrder': 'Weka oda',
       'myOrders': 'Oda zangu',
@@ -442,7 +444,7 @@ class AppStrings {
       'bestSeller': 'Inayouzwa Zaidi',
       'sellingOutFast': 'Inaisha haraka',
       'freeReturns': 'Kurudisha bidhaa bila usumbufu',
-      'freeShippingAbove': 'Usafirishaji bure kwa oda zaidi ya',
+      'deliveryByDistance': 'Usafirishaji hupigwa hesabu kwa umbali wako',
       'secureTransaction': 'Malipo Salama',
       'highRatedSeller': 'Muuzaji Bora',
       'cartEmptyTitle': 'Kikapu chako ni kitupu.',
@@ -452,6 +454,7 @@ class AppStrings {
       'orderSummary': 'Muhtasari wa oda',
       'subtotal': 'Jumla ndogo',
       'deliveryFee': 'Gharama ya usafirishaji',
+      'deliveryPending': 'Hupigwa hesabu kwa umbali',
       'discountLabel': 'Punguzo',
       'total': 'Jumla',
       'checkout': 'Lipia',
@@ -527,7 +530,7 @@ class AppStrings {
       'noAddresses': 'Aucune adresse enregistrée',
       'addAddress': 'Ajouter une adresse',
       'deliverHere': 'Livrer ici',
-      'cashOnDelivery': 'Paiement à la livraison',
+      'lipaNamba': 'Lipa Namba',
       'comingSoon': 'Bientôt disponible',
       'placeOrder': 'Commander',
       'orderPlaced': 'Commande passée',
@@ -588,7 +591,7 @@ class AppStrings {
       'bestSeller': 'Meilleure vente',
       'sellingOutFast': 'Bientôt épuisé',
       'freeReturns': 'Retours gratuits',
-      'freeShippingAbove': 'Livraison gratuite dès',
+      'deliveryByDistance': 'Livraison calculée selon la distance',
       'secureTransaction': 'Transaction sécurisée',
       'highRatedSeller': 'Vendeur bien noté',
       'cartEmptyTitle': 'Votre panier est vide',
@@ -598,6 +601,7 @@ class AppStrings {
       'orderSummary': 'Récapitulatif',
       'subtotal': 'Sous-total',
       'deliveryFee': 'Frais de livraison',
+      'deliveryPending': 'Calculée selon la distance',
       'discountLabel': 'Remise',
       'total': 'Total',
       'checkout': 'Passer la commande',
@@ -667,7 +671,7 @@ class AppStrings {
       'noAddresses': '暂无保存的地址',
       'addAddress': '添加地址',
       'deliverHere': '送到这里',
-      'cashOnDelivery': '货到付款',
+      'lipaNamba': 'Lipa Namba',
       'comingSoon': '即将推出',
       'placeOrder': '提交订单',
       'orderPlaced': '订单已提交',
@@ -728,7 +732,7 @@ class AppStrings {
       'bestSeller': '热销',
       'sellingOutFast': '即将售罄',
       'freeReturns': '免费退货',
-      'freeShippingAbove': '满额免运费',
+      'deliveryByDistance': '运费按距离计算',
       'secureTransaction': '安全交易',
       'highRatedSeller': '高评分卖家',
       'cartEmptyTitle': '购物车是空的',
@@ -738,6 +742,7 @@ class AppStrings {
       'orderSummary': '订单摘要',
       'subtotal': '小计',
       'deliveryFee': '运费',
+      'deliveryPending': '按距离计算',
       'discountLabel': '优惠',
       'total': '合计',
       'checkout': '去结算',

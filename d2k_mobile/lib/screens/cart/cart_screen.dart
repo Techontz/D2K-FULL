@@ -186,7 +186,6 @@ class _FilledCart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final currency = context.watch<CurrencyController>();
     final recommendations =
         context.read<CatalogRepository>().cached.take(10).toList();
 
@@ -198,30 +197,33 @@ class _FilledCart extends StatelessWidget {
                 AppSpacing.gutter, 12, AppSpacing.gutter, 24),
             physics: const BouncingScrollPhysics(),
             children: [
-              if (!cart.qualifiesForFreeDelivery)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.local_shipping_outlined,
-                          size: 20, color: AppColors.brandYellowDeep),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Add ${currency.format(cart.amountToFreeDelivery)} '
-                          'more for free delivery',
-                          style: AppTypography.meta,
-                        ),
-                      ),
-                    ],
-                  ),
+              // The old strip promised free delivery above a spend threshold.
+              // That promise was backed by a delivery fee this app invented
+              // locally; now that the backend prices delivery by distance,
+              // the app can no longer make the promise, so it explains how
+              // the charge is worked out instead.
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.local_shipping_outlined,
+                        size: 20, color: AppColors.brandYellowDeep),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        strings.deliveryByDistance,
+                        style: AppTypography.meta,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               for (final item in cart.items) ...[
                 _CartRow(item: item),
                 const SizedBox(height: 10),
@@ -394,12 +396,11 @@ class _SummaryCard extends StatelessWidget {
               value: '- ${currency.format(cart.savings)}',
               valueColor: AppColors.discountGreen,
             ),
+          // Named as pending rather than shown as zero: nobody has priced
+          // this delivery yet, which is not the same as it being free.
           _SummaryRow(
             label: strings.deliveryFee,
-            value: cart.delivery.isZero
-                ? strings.free
-                : currency.format(cart.delivery),
-            valueColor: cart.delivery.isZero ? AppColors.discountGreen : null,
+            value: strings.deliveryPending,
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),

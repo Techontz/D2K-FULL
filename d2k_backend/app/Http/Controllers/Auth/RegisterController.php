@@ -197,6 +197,29 @@ class RegisterController extends Controller
             $vendor->business_address = $request->business_address;
         }
 
+        // The till number customers pay into. Normalised through the same
+        // helper the storefront and the order snapshot use, so a number saved
+        // from this older endpoint is not a different shape from one saved
+        // through the seller console.
+        if ($request->has('lipa_namba')) {
+            $raw = trim((string) $request->input('lipa_namba'));
+
+            if ($raw === '') {
+                $vendor->lipa_namba = null;
+            } else {
+                $normalised = \App\Support\LipaNamba::normalise($raw);
+
+                if ($normalised === null) {
+                    return response()->json([
+                        'message' => 'That does not look like a Lipa Namba.',
+                        'errors'  => ['lipa_namba' => ['Enter the digits of your Lipa Namba, no letters.']],
+                    ], 422);
+                }
+
+                $vendor->lipa_namba = $normalised;
+            }
+        }
+
         if ($request->hasFile('logo')) {
             $path = $request->file('logo')->store('vendor_avatars', 'public');
             $vendor->logo = $path;

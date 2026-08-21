@@ -76,7 +76,7 @@ void main() {
         (s) => s.addToCart,
         (s) => s.specifications,
         (s) => s.contactSeller,
-        (s) => s.cashOnDelivery,
+        (s) => s.lipaNamba,
         (s) => s.noDescription,
         (s) => s.signInToContinue,
       ];
@@ -94,6 +94,9 @@ void main() {
             // are listed rather than treated as a gap.
             const sameInSomeLanguages = {
               'Messages', 'WhatsApp', 'D2K', 'Direct2Kariakoo', 'Total',
+              // A Swahili term already, and the name printed on the tills
+              // themselves — translating it would make it unrecognisable.
+              'Lipa Namba',
             };
             final englishValue = read(english, probe);
             final suspicious = value == englishValue &&
@@ -193,6 +196,8 @@ void main() {
 
       final order = orders.first;
       expect(order.reference, 'D2K-2026-0001');
+      // A historic order, placed before pay on delivery was withdrawn. It has
+      // to keep reading as what it was rather than being relabelled.
       expect(order.paymentMethod, 'cash_on_delivery');
       expect(order.paymentLabel, 'Cash on delivery');
       expect(order.total, 48000);

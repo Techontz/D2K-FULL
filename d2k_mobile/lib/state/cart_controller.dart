@@ -16,9 +16,12 @@ class CartController extends ChangeNotifier {
 
   static const String _prefsKey = 'd2k.cart';
 
-  /// Orders above this TZS subtotal ship free — mirrors the promo strip copy.
-  static const double freeDeliveryThresholdBase = 80000;
-  static const double deliveryFeeBase = 6500;
+  // No delivery figure is invented here any more.
+  //
+  // Delivery is priced by the backend from how far the destination actually
+  // is. A constant on the handset could only ever disagree with that, and the
+  // shopper would be shown one total and charged another. The cart therefore
+  // reports delivery as pending and the server's figure lands on the order.
 
   final Map<String, CartItem> _items = {};
 
@@ -46,17 +49,14 @@ class CartController extends ChangeNotifier {
   Money get savings => _items.values
       .fold(Money.zero, (sum, item) => sum + item.lineSavings);
 
-  bool get qualifiesForFreeDelivery =>
-      subtotal.baseAmount >= freeDeliveryThresholdBase;
+  /// Whether delivery has been priced yet.
+  ///
+  /// Always false in the cart: there is no destination to measure to until
+  /// checkout, so the fee is named as pending rather than guessed at.
+  bool get hasDeliveryQuote => false;
 
-  Money get delivery => isEmpty || qualifiesForFreeDelivery
-      ? Money.zero
-      : const Money(deliveryFeeBase);
-
-  Money get total => subtotal + delivery;
-
-  Money get amountToFreeDelivery => Money(
-      (freeDeliveryThresholdBase - subtotal.baseAmount).clamp(0, double.infinity));
+  /// Goods only. Delivery is added by the backend once it has been quoted.
+  Money get total => subtotal;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -143,7 +143,9 @@ class CartController extends ChangeNotifier {
     required RemoteShopSource shop,
     required String address,
     required String phone,
-    String paymentMethod = 'cash_on_delivery',
+    // Pay on delivery has been withdrawn; the shopper pays the seller on
+    // that seller's own Lipa Namba.
+    String paymentMethod = 'lipa_namba',
   }) async {
     final order = await shop.placeOrder(
       items: [

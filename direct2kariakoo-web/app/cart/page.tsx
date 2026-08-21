@@ -9,8 +9,6 @@ import { SiteChrome } from "@/components/layout/SiteChrome";
 import { Button, ButtonLink, EmptyState } from "@/components/ui/Primitives";
 import { useT } from "@/lib/i18n";
 
-const DELIVERY_FEE = 3000; // Matches OrderController::DELIVERY_FEE.
-
 /**
  * Cart.
  *
@@ -37,7 +35,11 @@ export default function CartPage() {
     );
   }
 
-  const total = cart.subtotal + (cart.lines.length ? DELIVERY_FEE : 0);
+  // Goods only. The flat TZS 3,000 that used to be bolted on here is gone —
+  // delivery is priced by distance to the shopper's address, and the cart has
+  // no address to price against, so it is named as pending rather than
+  // guessed at. The binding figure comes from the server at checkout.
+  const total = cart.subtotal;
 
   return (
     <SiteChrome>
@@ -134,8 +136,12 @@ export default function CartPage() {
                   })`}
                   value={formatMoney(cart.subtotal)}
                 />
-                <SummaryRow label={t("cart.delivery")} value={formatMoney(DELIVERY_FEE)} />
+                <SummaryRow label={t("cart.delivery")} value={t("cart.deliveryPending")} />
               </dl>
+
+              <p className="mt-2 text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                {t("cart.deliveryNote")}
+              </p>
 
               <div className="mt-3 flex items-baseline justify-between border-t border-[color:var(--color-line)] pt-3">
                 <span className="text-[15px] font-extrabold">{t("cart.total")}</span>

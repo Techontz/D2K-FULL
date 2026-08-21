@@ -149,12 +149,25 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('payment_method')
                     ->label('Payment')
+                    // `cash_on_delivery` is no longer offered to customers, but
+                    // orders placed before it was withdrawn still carry it.
+                    // Admins need those rows to read as what they were, so the
+                    // label is kept here for history and nowhere else.
                     ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'cash_on_delivery' => 'Cash on delivery',
+                        'lipa_namba'       => 'Lipa Namba',
                         'mobile_money'     => 'Mobile money',
+                        'cash_on_delivery' => 'Cash on delivery (withdrawn)',
                         default            => $state ?: '—',
                     })
                     ->toggleable(),
+
+                // The number this customer was actually told to pay, as it
+                // stood on the day. Read off the order, not the vendor, so a
+                // seller changing their till does not rewrite history.
+                Tables\Columns\TextColumn::make('lipa_namba')
+                    ->label('Paid to')
+                    ->formatStateUsing(fn (?string $state) => \App\Support\LipaNamba::pretty($state) ?? '—')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Placed')

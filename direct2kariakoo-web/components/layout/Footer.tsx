@@ -93,7 +93,7 @@ export function Footer({ categories = [] }: { categories?: Category[] }) {
 
           <h3 className="mb-2 mt-6 text-sm font-extrabold">{t("footer.weAccept")}</h3>
           <div className="flex flex-wrap gap-2">
-            {[t("payment.mpesa"), t("payment.tigo"), t("payment.airtel"), t("payment.cashOnDelivery")].map((method) => (
+            {[t("payment.mpesa"), t("payment.tigo"), t("payment.airtel"), t("payment.lipaNamba")].map((method) => (
               <span
                 key={method}
                 className="rounded-[var(--radius-xs)] border border-[color:var(--color-line)] px-2 py-1 text-[11px] font-semibold text-[color:var(--color-ink-muted)]"

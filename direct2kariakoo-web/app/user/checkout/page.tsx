@@ -395,6 +395,27 @@ export default function CheckoutPage() {
                           </span>
                         </div>
 
+                        {/* ---- this seller's Lipa Namba ----
+
+                            Printed under the seller it belongs to, never
+                            merged across the basket: paying one vendor for
+                            everybody's goods would leave the rest unpaid. A
+                            seller who has not set one up shows the reason
+                            rather than a blank line. */}
+                        <div className="mb-3 rounded-lg bg-gray-50 p-3">
+                          <div className="text-xs text-gray-500">Lipa Namba</div>
+                          {group.vendor.lipa_namba ? (
+                            <div className="break-all font-mono text-lg font-bold tracking-wide text-gray-900">
+                              {group.vendor.lipa_namba_display || group.vendor.lipa_namba}
+                            </div>
+                          ) : (
+                            <div className="text-xs font-semibold text-red-600">
+                              This seller has not set up their Lipa Namba yet, so their
+                              items cannot be paid for.
+                            </div>
+                          )}
+                        </div>
+
                         <div className="text-xs text-gray-500 mb-1">Payment Options</div>
                         <ul className="text-sm text-gray-700 space-y-1">
                           {group.vendor.payment_options.length ? (

@@ -233,19 +233,75 @@ export interface OrderItem {
   status: string;
 }
 
+/**
+ * Who to pay for one seller's share of an order.
+ *
+ * Read off the order, not off the seller's current profile: the number is
+ * snapshotted when the order is placed, so a seller who changes their till
+ * next month does not rewrite what a past customer was told to pay.
+ */
+export interface VendorPayment {
+  vendor_id: number;
+  vendor_name: string;
+  /** Null on orders placed before Lipa Namba existed. */
+  lipa_namba: string | null;
+  lipa_namba_display: string | null;
+  subtotal: number;
+  item_count: number;
+}
+
 export interface Order {
   reference: string;
   status: string;
   placed_at: string | null;
   item_count: number;
   subtotal: number;
-  delivery_fee: number;
+  /** Null while delivery is still to be priced — not the same as free. */
+  delivery_fee: number | null;
+  delivery_status: "pending" | "quoted";
   total: number;
   currency: string;
   payment_method: string | null;
   delivery_address: string | null;
   customer_phone: string | null;
+  vendor_payments: VendorPayment[];
   items: OrderItem[];
+}
+
+/** One seller's share of a basket, with their own till number. */
+export interface CheckoutVendorGroup {
+  vendor_id: number | null;
+  vendor_name: string;
+  /** Null when this seller has not set one up — never another seller's. */
+  lipa_namba: string | null;
+  lipa_namba_display: string | null;
+  can_accept_orders: boolean;
+  blocked_reason: string | null;
+  subtotal: number;
+  items: { product_id: number; name: string; quantity: number; price: number; total: number }[];
+}
+
+/**
+ * The basket as the server prices it.
+ *
+ * The storefront used to add its own copy of the delivery charge, which is how
+ * a customer sees one total and is charged another. This is now the only
+ * arithmetic on the page.
+ */
+export interface CheckoutPreview {
+  currency: string;
+  subtotal: number;
+  delivery: {
+    status: "pending" | "quoted";
+    amount: number | null;
+    distance_km: number | null;
+    reason: string | null;
+  };
+  total: number;
+  vendor_groups: CheckoutVendorGroup[];
+  can_place_order: boolean;
+  issues: string[];
+  missing_products: number[];
 }
 
 export interface AuthUser {

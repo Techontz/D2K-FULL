@@ -123,9 +123,12 @@ class ShopOrder {
   /// Only an order nothing has shipped for can still be called off.
   bool get canCancel => status == 'pending' || status == 'processing';
 
+  /// `cash_on_delivery` is no longer offered, but orders placed before it was
+  /// withdrawn still carry it and have to keep reading as what they were.
   String get paymentLabel => switch (paymentMethod) {
-        'cash_on_delivery' => 'Cash on delivery',
+        'lipa_namba' => 'Lipa Namba',
         'mobile_money' => 'Mobile money',
+        'cash_on_delivery' => 'Cash on delivery',
         _ => paymentMethod.replaceAll('_', ' '),
       };
 }

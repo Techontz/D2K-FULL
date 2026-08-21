@@ -21,6 +21,10 @@ class Order extends Model
         'status',
         'payment_provider',
         'payment_method',
+        // The vendor's till number as it stood when this order was placed.
+        // Snapshotted, never read back off the vendor: a seller changing
+        // their number must not rewrite what past customers were told to pay.
+        'lipa_namba',
         'delivery_address',
         'customer_phone',
         'external_id',

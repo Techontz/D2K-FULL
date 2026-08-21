@@ -729,14 +729,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _additionalInfoCard(AppStrings strings) {
-    final currency = context.watch<CurrencyController>();
     final rows = [
       (Icons.autorenew, strings.freeReturns),
-      (
-        Icons.local_shipping_outlined,
-        '${strings.freeShippingAbove} '
-            '${currency.formatValue(CartController.freeDeliveryThresholdBase)}'
-      ),
+      (Icons.local_shipping_outlined, strings.deliveryByDistance),
       (Icons.support_agent_outlined, 'D2K support 7 days a week'),
     ];
     return _Card(

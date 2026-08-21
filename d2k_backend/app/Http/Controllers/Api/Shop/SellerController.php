@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attribute;
 use App\Models\VendorDocument;
 use App\Models\VerificationRequirement;
+use App\Support\LipaNamba;
 use App\Support\Media;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
@@ -57,6 +58,16 @@ class SellerController extends Controller
                 'name'          => $vendor->business_name,
                 'logo'          => Media::url($vendor->logo),
                 'phone'         => Phone::pretty($vendor->phone),
+
+                // The till number customers pay into. `can_accept_orders` is
+                // the flag the console acts on: without a Lipa Namba the
+                // store's items cannot be checked out, so the seller is told
+                // plainly rather than losing sales without knowing why.
+                'lipa_namba'         => $vendor->lipa_namba,
+                'lipa_namba_display' => LipaNamba::pretty($vendor->lipa_namba),
+                'has_lipa_namba'     => $vendor->hasLipaNamba(),
+                'can_accept_orders'  => $vendor->canAcceptOrders(),
+
                 'address'       => $vendor->business_address,
                 'about'         => $vendor->description,
                 'website'       => $vendor->website,
@@ -101,11 +112,46 @@ class SellerController extends Controller
             'business_name'    => ['sometimes', 'string', 'max:255'],
             'phone'            => ['sometimes', 'nullable', 'string', 'max:40'],
             'business_address' => ['sometimes', 'nullable', 'string', 'max:255'],
+
+            // Validated against Tanzanian till numbers rather than accepted as
+            // free text — a mistyped Lipa Namba is money sent to a stranger.
+            // Clearing it is allowed: a seller who loses their till should be
+            // able to take the number down rather than leave a dead one up.
+            'lipa_namba'       => ['sometimes', 'nullable', 'string', 'max:32'],
             'description'      => ['sometimes', 'nullable', 'string', 'max:2000'],
             'website'          => ['sometimes', 'nullable', 'url', 'max:255'],
             'email'            => ['sometimes', 'nullable', 'email', 'max:255'],
             'logo'             => ['sometimes', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
+
+        if (array_key_exists('lipa_namba', $data)) {
+            $raw = trim((string) $data['lipa_namba']);
+
+            if ($raw === '') {
+                $data['lipa_namba'] = null;
+            } else {
+                $normalised = LipaNamba::normalise($raw);
+
+                if ($normalised === null) {
+                    return response()->json([
+                        'message' => 'That does not look like a Lipa Namba.',
+                        'errors'  => [
+                            'lipa_namba' => [
+                                sprintf(
+                                    'Enter the digits of your Lipa Namba — between %d and %d of them, no letters.',
+                                    LipaNamba::MIN_DIGITS,
+                                    LipaNamba::MAX_DIGITS,
+                                ),
+                            ],
+                        ],
+                    ], 422);
+                }
+
+                // Stored normalised so checkout, the order snapshot and the
+                // seller's own console all show the same digits.
+                $data['lipa_namba'] = $normalised;
+            }
+        }
 
         if ($request->hasFile('logo')) {
             // Replaces only when a new file is actually sent; an edit that

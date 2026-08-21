@@ -27,6 +27,19 @@ class VendorResource extends Resource
                 Forms\Components\TextInput::make('business_name')->required(),
                 Forms\Components\TextInput::make('phone')->required(),
                 Forms\Components\TextInput::make('business_address')->required(),
+
+                // The till number customers pay into at checkout. Stores
+                // without one cannot take orders, so it is visible here for
+                // support to check rather than only inside the seller console.
+                Forms\Components\TextInput::make('lipa_namba')
+                    ->label('Lipa Namba')
+                    ->helperText('The number customers pay this seller on. Digits only.')
+                    ->maxLength(32)
+                    ->rule(fn () => function (string $attribute, $value, \Closure $fail) {
+                        if (filled($value) && ! \App\Support\LipaNamba::isValid($value)) {
+                            $fail('That does not look like a Tanzanian Lipa Namba.');
+                        }
+                    }),
                 Forms\Components\Toggle::make('is_approved')->label('Approved'),
                 // Add other fields as needed (email, nida_number, etc)
             ]);
@@ -44,6 +57,13 @@ class VendorResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('phone')->searchable()->toggleable(),
+
+                TextColumn::make('lipa_namba')
+                    ->label('Lipa Namba')
+                    ->formatStateUsing(fn (?string $state) => \App\Support\LipaNamba::pretty($state) ?? '— not set')
+                    ->color(fn (?string $state) => \App\Support\LipaNamba::isValid($state) ? null : 'danger')
+                    ->searchable()
+                    ->toggleable(),
 
                 // Two independent axes, deliberately given different visual
                 // languages so they are never read as the same thing:

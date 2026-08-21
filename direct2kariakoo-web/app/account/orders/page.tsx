@@ -148,10 +148,63 @@ function OrdersContent() {
                 </p>
               ) : null}
 
+              {/* ---- how to pay ----
+
+                  Every number here is the one that was on the screen when this
+                  order was placed: the backend snapshots each seller's Lipa
+                  Namba onto the order line. A seller who changes their till
+                  next month does not get to rewrite what a past customer was
+                  told to pay, so a receipt stays answerable months later.
+
+                  Orders placed before Lipa Namba existed carry no snapshot;
+                  those rows are skipped rather than back-filled from the
+                  seller's current profile, which would be a guess. */}
+              {order.vendor_payments.some((payment) => payment.lipa_namba) ? (
+                <div className="mt-3 border-t border-[color:var(--color-line)] pt-3">
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
+                    {t("orders.howToPay")}
+                  </p>
+                  <ul className="space-y-2">
+                    {order.vendor_payments
+                      .filter((payment) => payment.lipa_namba)
+                      .map((payment) => (
+                        <li
+                          key={payment.vendor_id}
+                          className="rounded-[var(--radius-sm)] bg-[color:var(--color-surface-alt)] p-2.5"
+                        >
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <span className="clamp-1 min-w-0 text-[13px] font-extrabold">
+                              {payment.vendor_name}
+                            </span>
+                            <span className="shrink-0 text-[13px] font-bold">
+                              {formatMoney(payment.subtotal)}
+                            </span>
+                          </div>
+                          <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
+                            {t("payment.lipaNamba")}
+                          </span>
+                          {/* break-all so a long till wraps inside a 320px
+                              card instead of widening the page. */}
+                          <span className="block break-all font-mono text-[16px] font-black leading-tight tracking-wide">
+                            {payment.lipa_namba_display ?? payment.lipa_namba}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--color-line)] pt-3">
                 <div>
                   <span className="text-[12px] text-[color:var(--color-ink-muted)]">{t("orders.total")}</span>
                   <p className="text-[18px] font-black">{formatMoney(order.total)}</p>
+                  {/* Named rather than shown as zero: the fee has not been
+                      worked out yet, which is not the same as free. */}
+                  {order.delivery_status === "pending" ? (
+                    <p className="text-[11px] text-[color:var(--color-ink-muted)]">
+                      {t("orders.deliveryPending")}
+                    </p>
+                  ) : null}
                 </div>
 
                 {["pending", "processing"].includes(order.status) ? (

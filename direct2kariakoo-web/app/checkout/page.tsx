@@ -7,7 +7,7 @@ import { apiError } from "@/lib/api";
 import { BRAND } from "@/lib/brand";
 import { formatMoney } from "@/lib/format";
 import shop from "@/lib/shop";
-import type { Address as AddressType } from "@/lib/types";
+import type { Address as AddressType, CheckoutPreview } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { useLocation } from "@/lib/store/location";
 import { LocationPicker } from "@/components/location/LocationPicker";
@@ -15,8 +15,6 @@ import { useAuth } from "@/lib/store/auth";
 import { useCart } from "@/lib/store/cart";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { Button, ButtonLink, EmptyState } from "@/components/ui/Primitives";
-
-const DELIVERY_FEE = 3000;
 
 /**
  * Checkout — the point at which the storefront asks who the shopper is.
@@ -46,12 +44,22 @@ function CheckoutContent() {
   // one-off destination is not overwritten when the saved list arrives.
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
-  // Only cash on delivery is connected. Lipa Namba and mobile money are shown
-  // but cannot be selected, because pretending an unintegrated provider took
-  // the money would create an order nobody has actually paid for.
-  const payment = "cash_on_delivery" as const;
+  // The shopper pays each seller on that seller's own Lipa Namba. Mobile money
+  // is shown but not selectable: pretending an unintegrated provider took the
+  // money would create an order nobody has actually paid for.
+  const payment = "lipa_namba" as const;
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Everything priced — subtotal, delivery, per-seller totals and each
+  // seller's till number — comes from the server. The storefront deliberately
+  // holds no copy of the pricing rules to fall out of step with the backend.
+  const [preview, setPreview] = useState<CheckoutPreview | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  // The destination pin, when the shopper has one. Delivery is priced from it;
+  // an address typed without a pin leaves the fee pending rather than free.
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Ask for credentials as soon as the shopper lands here, not before.
   useEffect(() => {
@@ -100,9 +108,71 @@ function CheckoutContent() {
     setSelectedId(item.id);
     setAddress(item.formatted);
     if (item.phone) setPhone(item.phone);
+    // A saved address may carry the pin it was created with, which is what
+    // lets delivery be priced without asking for the map again.
+    setCoords(
+      item.latitude !== null && item.longitude !== null
+        ? { latitude: item.latitude, longitude: item.longitude }
+        : null,
+    );
   }
 
-  const total = cart.subtotal + (cart.lines.length ? DELIVERY_FEE : 0);
+  // A pin chosen in the header is a destination too.
+  useEffect(() => {
+    if (pinned && !coords) {
+      setCoords({ latitude: pinned.latitude, longitude: pinned.longitude });
+    }
+  }, [pinned, coords]);
+
+  // Re-price whenever the basket or the destination changes. The request is
+  // cancelled on the way out so a slow reply for an old basket cannot land
+  // after a newer one and show the shopper stale figures.
+  const cartKey = cart.lines.map((line) => `${line.product.id}x${line.quantity}`).join(",");
+
+  useEffect(() => {
+    if (!cart.ready || cart.lines.length === 0) {
+      setPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    shop
+      .checkoutPreview({
+        items: cart.lines.map((line) => ({
+          product_id: line.product.id,
+          quantity: line.quantity,
+        })),
+        delivery_latitude: coords?.latitude ?? null,
+        delivery_longitude: coords?.longitude ?? null,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setPreview(result);
+        setPreviewFailed(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Without the server's answer we do not know who to pay, so the page
+        // says so rather than inventing a total or a number.
+        setPreview(null);
+        setPreviewFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartKey, cart.ready, coords?.latitude, coords?.longitude, isAuthenticated]);
+
+  const groups = preview?.vendor_groups ?? [];
+  const blocked = groups.filter((group) => !group.can_accept_orders);
+  const canPlaceOrder = preview?.can_place_order === true;
+  const deliveryFee = preview?.delivery.status === "quoted" ? preview.delivery.amount : null;
+
+  // The server's figure while we have one, the basket's own arithmetic only as
+  // a first-paint stand-in. Either way nothing is added on top of the goods.
+  const total = preview?.total ?? cart.subtotal;
 
   if (cart.ready && cart.lines.length === 0) {
     return (
@@ -143,6 +213,8 @@ function CheckoutContent() {
         delivery_address: address.trim(),
         customer_phone: phone.trim(),
         payment_method: payment,
+        delivery_latitude: coords?.latitude ?? null,
+        delivery_longitude: coords?.longitude ?? null,
       });
 
       cart.clear();
@@ -267,19 +339,12 @@ function CheckoutContent() {
             <div className="space-y-2">
               <PaymentOption
                 checked
-                title={t("payment.cashOnDelivery")}
-                body={t("payment.cashOnDeliveryHint")}
-              />
-
-              {/* Shown so shoppers know these are coming, but not selectable —
-                  there is no integration behind either yet. */}
-              <PaymentOption
-                unavailable
                 title={t("payment.lipaNamba")}
                 body={t("payment.lipaNambaHint")}
-                badge={t("payment.comingSoon")}
               />
 
+              {/* Shown so shoppers know it is coming, but not selectable —
+                  there is no integration behind it yet. */}
               <PaymentOption
                 unavailable
                 title={t("payment.mobileMoney")}
@@ -305,6 +370,68 @@ function CheckoutContent() {
               {t("payment.unavailableNote")}
             </p>
           </section>
+
+          {/* ---- who to pay ----
+
+              A D2K basket routinely spans several stores and each one has its
+              own till, so this is a list rather than a single number. Merging
+              them would be wrong in the most expensive way available: the
+              shopper pays one seller for everybody's goods and the rest are
+              never paid at all. Every number here comes from the server, for
+              the seller it is printed under. */}
+          {groups.length > 0 ? (
+            <section className="rounded-[var(--radius-md)] bg-[color:var(--color-surface)] p-4">
+              <h2 className="mb-1 text-[15px] font-extrabold">{t("checkout.paymentInstructions")}</h2>
+              <p className="mb-3 text-[12px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                {t("payment.instructions")}
+              </p>
+
+              <ul className="space-y-2">
+                {groups.map((group) => (
+                  <li
+                    key={group.vendor_id ?? group.vendor_name}
+                    className={`rounded-[var(--radius-sm)] border p-3 ${
+                      group.can_accept_orders
+                        ? "border-[color:var(--color-line-strong)]"
+                        : "border-[color:var(--color-sale)] bg-red-50"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <span className="min-w-0 text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
+                        {t("payment.payTo")}
+                      </span>
+                      <span className="text-[13px] font-bold">{formatMoney(group.subtotal)}</span>
+                    </div>
+
+                    <p className="clamp-2 text-[14px] font-extrabold">{group.vendor_name}</p>
+
+                    {group.can_accept_orders && group.lipa_namba ? (
+                      <div className="mt-2">
+                        <span className="block text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
+                          {t("payment.lipaNamba")}
+                        </span>
+                        {/* break-all, not nowrap: a twelve-digit till must
+                            wrap inside a 320px column rather than push the
+                            page sideways. */}
+                        <span className="block break-all font-mono text-[19px] font-black leading-tight tracking-wide">
+                          {group.lipa_namba_display ?? group.lipa_namba}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-2">
+                        <p className="text-[12px] font-bold text-[color:var(--color-sale)]">
+                          {group.blocked_reason ?? t("payment.notSetUp")}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                          {t("payment.notSetUpHint")}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="rounded-[var(--radius-md)] bg-[color:var(--color-surface)] p-4">
             <h2 className="mb-3 text-[15px] font-extrabold">
@@ -341,15 +468,63 @@ function CheckoutContent() {
                 <dd className="font-semibold">{formatMoney(cart.subtotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-[color:var(--color-ink-muted)]">{t("cart.delivery")}</dt>
-                <dd className="font-semibold">{formatMoney(DELIVERY_FEE)}</dd>
+                <dt className="min-w-0 text-[color:var(--color-ink-muted)]">{t("cart.delivery")}</dt>
+                {/* There is no flat charge any more. Until the fee has actually
+                    been worked out from the distance, this says so — printing
+                    a placeholder figure only commits the shopper to a total the
+                    rider would then have to argue with. */}
+                <dd className="shrink-0 text-right font-semibold">
+                  {deliveryFee !== null
+                    ? formatMoney(deliveryFee)
+                    : (
+                      <span className="text-[12px] font-bold text-[color:var(--color-ink-muted)]">
+                        {t("cart.deliveryPending")}
+                      </span>
+                    )}
+                </dd>
               </div>
             </dl>
 
-            <div className="mt-3 flex items-baseline justify-between border-t border-[color:var(--color-line)] pt-3">
+            {deliveryFee === null ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                {t("checkout.deliveryPendingNote")}
+              </p>
+            ) : null}
+
+            <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[color:var(--color-line)] pt-3">
               <span className="text-[15px] font-extrabold">{t("cart.total")}</span>
               <span className="text-[20px] font-black">{formatMoney(total)}</span>
             </div>
+
+            {previewFailed ? (
+              <p
+                role="alert"
+                className="mt-3 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] text-[color:var(--color-sale)]"
+              >
+                {t("checkout.pricingUnavailable")}
+              </p>
+            ) : null}
+
+            {blocked.length > 0 ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--color-sale)] bg-red-50 px-3 py-2"
+              >
+                <p className="text-[12px] font-extrabold text-[color:var(--color-sale)]">
+                  {t("checkout.blockedTitle")}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {blocked.map((group) => (
+                    <li
+                      key={group.vendor_id ?? group.vendor_name}
+                      className="text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]"
+                    >
+                      {group.blocked_reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {error ? (
               <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] text-[color:var(--color-sale)]">
@@ -357,7 +532,15 @@ function CheckoutContent() {
               </p>
             ) : null}
 
-            <Button type="submit" size="lg" className="mt-4 w-full" disabled={placing}>
+            <Button
+              type="submit"
+              size="lg"
+              className="mt-4 w-full"
+              // Held until the server has confirmed every seller in the basket
+              // can actually be paid. Letting it through would take an order
+              // whose money has nowhere to go.
+              disabled={placing || !canPlaceOrder}
+            >
               {placing ? t("checkout.placing") : t("checkout.placeOrder")}
             </Button>
 
@@ -377,6 +560,9 @@ function CheckoutContent() {
           setLocation(picked);
           setAddress(picked.formatted);
           setSelectedId(null);
+          // The pin is what delivery is priced from, so it goes to the server
+          // on the next preview rather than only into the address line.
+          setCoords({ latitude: picked.latitude, longitude: picked.longitude });
         }}
       />
     </div>

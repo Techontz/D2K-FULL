@@ -2,6 +2,7 @@ import api from "./api";
 import type {
   Address,
   AddressInput,
+  CheckoutPreview,
   ChatMessage,
   ChatParticipant,
   ChatProductContext,
@@ -129,12 +130,31 @@ export const shop = {
     return data.order;
   },
 
+  /**
+   * Price the basket and find out who is being paid.
+   *
+   * Read-only and safe to call whenever the basket or the delivery pin
+   * changes. The server owns the arithmetic — the storefront no longer keeps
+   * its own copy of the delivery charge to drift out of sync.
+   */
+  async checkoutPreview(payload: {
+    items: { product_id: number; quantity: number }[];
+    delivery_latitude?: number | null;
+    delivery_longitude?: number | null;
+  }): Promise<CheckoutPreview> {
+    const { data } = await api.post<CheckoutPreview>("/shop/checkout/preview", payload);
+    return data;
+  },
+
   async placeOrder(payload: {
     items: { product_id: number; quantity: number }[];
     delivery_address: string;
     customer_phone: string;
-    payment_method: "cash_on_delivery" | "mobile_money";
+    payment_method: "lipa_namba" | "mobile_money";
     payment_provider?: string;
+    /** The destination pin, when one has been dropped. Delivery is priced from it. */
+    delivery_latitude?: number | null;
+    delivery_longitude?: number | null;
   }) {
     const { data } = await api.post("/shop/orders", payload);
     return data as { message: string; reference: string; order: Order };

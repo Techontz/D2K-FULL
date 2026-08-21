@@ -115,7 +115,7 @@ export const enPages = {
       intro: "Direct2Kariakoo connects shoppers across Tanzania directly with sellers in Kariakoo.",
       sections: [
       { heading: "What we do", body: ["Kariakoo is the largest trading market in East Africa, and almost everything sold in Tanzania passes through it. We put those shops online, so you can buy from them without travelling into the market — and have it delivered."] },
-      { heading: "How it works", body: ["Sellers list their real stock. You browse, order and pay on delivery. We handle the rider and the customer support."] },
+      { heading: "How it works", body: ["Sellers list their real stock. You browse, order, and pay the seller directly on their Lipa Namba. We handle the rider and the customer support."] },
       { heading: "Our sellers", body: ["Every store is reviewed by an administrator before its products appear. Approved stores carry a verified badge on their listings."] },
       { heading: "Where we deliver", body: ["Dar es Salaam first, and other regions of Tanzania where a courier route exists."] },
       ],

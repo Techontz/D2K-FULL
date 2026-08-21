@@ -63,6 +63,27 @@ export default function VendorDashboardPage() {
         <ButtonLink href="/vendor/products">Manage products</ButtonLink>
       </header>
 
+      {/* ---- no till number, no sales ----
+
+          Ranked above the approval notice because it is the one the seller can
+          act on immediately and entirely alone. Checkout refuses a basket
+          containing this store's items outright, so leaving it implicit would
+          mean a seller watching orders stop with no idea why. */}
+      {!vendor.has_lipa_namba ? (
+        <div className="rounded-[var(--radius-md)] border border-[color:var(--color-sale)] bg-red-50 p-4">
+          <p className="text-[14px] font-bold text-[color:var(--color-sale)]">
+            Add your Lipa Namba to start receiving orders
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-[color:var(--color-ink-muted)]">
+            Customers pay you directly on your own Lipa Namba. Until you enter it,
+            they cannot complete a purchase from your store.
+          </p>
+          <ButtonLink href="/vendor/settings/profile" size="sm" className="mt-3">
+            Add Lipa Namba
+          </ButtonLink>
+        </div>
+      ) : null}
+
       {!vendor.is_approved ? (
         <div className="rounded-[var(--radius-md)] border border-[color:var(--color-warn)] bg-[color:var(--color-warn-soft)] p-4">
           <p className="text-[14px] font-bold text-[color:var(--color-warn)]">

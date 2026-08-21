@@ -280,7 +280,7 @@ function ProductContent() {
                 title={t("product.fastDelivery")}
                 body={product.vendor?.location ?? t("product.dispatchedFrom", { city: BRAND.city })}
               />
-              <TrustRow icon="💵" title={t("payment.cashOnDelivery")} body={t("product.codHint")} />
+              <TrustRow icon="💳" title={t("payment.lipaNamba")} body={t("product.payHint")} />
               <TrustRow icon="↩️" title={t("product.easyReturns")} body={t("product.easyReturnsHint")} />
             </ul>
           </section>

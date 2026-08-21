@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\VendorPaymentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Shop\AddressController as ShopAddressController;
 use App\Http\Controllers\Api\Shop\CatalogController as ShopCatalogController;
+use App\Http\Controllers\Api\Shop\CheckoutController as ShopCheckoutController;
 use App\Http\Controllers\Api\Shop\ChatController as ShopChatController;
 use App\Http\Controllers\Api\Shop\SellerController as ShopSellerController;
 use App\Http\Controllers\Api\Shop\OrderController as ShopOrderController;
@@ -142,6 +143,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/addresses/{id}', [ShopAddressController::class, 'update'])->whereNumber('id');
         Route::delete('/addresses/{id}', [ShopAddressController::class, 'destroy'])->whereNumber('id');
         Route::post('/addresses/{id}/default', [ShopAddressController::class, 'setDefault'])->whereNumber('id');
+
+        // Prices the basket server-side and says which seller is owed what,
+        // so the storefront never has to keep its own copy of the pricing
+        // rules in sync with this one.
+        Route::post('/checkout/preview', [ShopCheckoutController::class, 'preview']);
 
         Route::get('/orders', [ShopOrderController::class, 'index']);
         Route::post('/orders', [ShopOrderController::class, 'store']);

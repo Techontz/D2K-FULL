@@ -38,6 +38,8 @@ class StorefrontTest extends TestCase
         $this->vendor = Vendor::create([
             'user_id' => $owner->id, 'business_name' => 'Kariakoo Test Store',
             'phone' => '0700000001', 'is_approved' => true,
+            // Checkout will not take an order for a store with no till number.
+            'lipa_namba' => '123456',
         ]);
 
         $this->category = Category::create(['name' => 'Electronics']);
@@ -240,7 +242,7 @@ class StorefrontTest extends TestCase
             'items' => [['product_id' => $this->product->id, 'quantity' => 3]],
             'delivery_address' => 'Kariakoo, Dar es Salaam',
             'customer_phone' => '0700000004',
-            'payment_method' => 'cash_on_delivery',
+            'payment_method' => 'lipa_namba',
         ])->assertCreated();
 
         $reference = $response->json('reference');
@@ -267,7 +269,7 @@ class StorefrontTest extends TestCase
             'items' => [['product_id' => $this->product->id, 'quantity' => 99]],
             'delivery_address' => 'Kariakoo',
             'customer_phone' => '0700000005',
-            'payment_method' => 'cash_on_delivery',
+            'payment_method' => 'lipa_namba',
         ])->assertStatus(422);
 
         $this->assertSame(10, $this->product->fresh()->stock, 'A rejected order must not touch stock.');
@@ -287,7 +289,7 @@ class StorefrontTest extends TestCase
             'items' => [['product_id' => $this->product->id, 'quantity' => 4]],
             'delivery_address' => 'Kariakoo',
             'customer_phone' => '0700000006',
-            'payment_method' => 'cash_on_delivery',
+            'payment_method' => 'lipa_namba',
         ])->json('reference');
 
         $this->assertSame(6, $this->product->fresh()->stock);

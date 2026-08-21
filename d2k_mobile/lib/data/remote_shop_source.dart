@@ -84,7 +84,7 @@ class RemoteShopSource {
     required List<OrderLineRequest> items,
     required String deliveryAddress,
     required String customerPhone,
-    String paymentMethod = 'cash_on_delivery',
+    String paymentMethod = 'lipa_namba',
   }) async {
     final body = await _api.post('/shop/orders', {
       'items': [
