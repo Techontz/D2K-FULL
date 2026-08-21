@@ -131,6 +131,62 @@ class LipaNambaCheckoutTest extends TestCase
         $this->assertSame(5, $this->productNoTill->fresh()->stock, 'A blocked checkout must not touch stock.');
     }
 
+    public function test_one_seller_without_a_till_does_not_block_the_rest_of_the_basket(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $response = $this->postJson('/api/shop/checkout/preview', [
+            'items' => [
+                ['product_id' => $this->productA->id, 'quantity' => 1],      // payable
+                ['product_id' => $this->productNoTill->id, 'quantity' => 1], // not
+            ],
+        ])->assertOk();
+
+        // The whole checkout used to go dead here because one store had not
+        // configured a till. The payable seller is still orderable.
+        $this->assertTrue($response->json('can_place_order'));
+
+        $this->assertSame([$this->productA->id], $response->json('payable_product_ids'));
+        $this->assertEquals(80000, $response->json('payable_subtotal'));
+
+        // The unpayable store is still reported, so the shopper is told rather
+        // than having their item silently vanish.
+        $groups = collect($response->json('vendor_groups'))->keyBy('vendor_name');
+        $this->assertFalse($groups['Vendor C']['can_accept_orders']);
+        $this->assertNull($groups['Vendor C']['lipa_namba']);
+    }
+
+    public function test_the_payable_half_of_a_mixed_basket_can_actually_be_ordered(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        // The storefront submits only what the preview called payable.
+        $reference = $this->postJson('/api/shop/orders', [
+            'items'            => [['product_id' => $this->productA->id, 'quantity' => 1]],
+            'delivery_address' => 'Kariakoo, Dar es Salaam',
+            'customer_phone'   => '0700000009',
+            'payment_method'   => 'lipa_namba',
+        ])->assertCreated()->json('reference');
+
+        $order = $this->getJson("/api/shop/orders/{$reference}")->assertOk()->json('order');
+
+        $this->assertSame('lipa_namba', $order['payment_method']);
+        $this->assertSame('111222', $order['vendor_payments'][0]['lipa_namba']);
+
+        // The unpayable seller's stock was never touched.
+        $this->assertSame(5, $this->productNoTill->fresh()->stock);
+    }
+
+    public function test_a_basket_of_only_unpayable_sellers_cannot_be_ordered(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $response = $this->previewFor($this->productNoTill)->assertOk();
+
+        $this->assertFalse($response->json('can_place_order'));
+        $this->assertSame([], $response->json('payable_product_ids'));
+    }
+
     /* ---------------------------------------------------------------- */
     /* E: the snapshot                                                   */
     /* ---------------------------------------------------------------- */
@@ -391,8 +447,13 @@ class LipaNambaCheckoutTest extends TestCase
         $this->assertNull(LipaNamba::normalise('1234567890123'));
         $this->assertNull(LipaNamba::normalise(null));
 
+        // Grouped from the right, so nothing is stranded at the end and no
+        // group is left as a single digit.
         $this->assertSame('123456', LipaNamba::pretty('123456'));
-        $this->assertSame('076 422 447 7', LipaNamba::pretty('0764224477'));
+        $this->assertSame('87 654 321', LipaNamba::pretty('87654321'));
+        $this->assertSame('876 543 210', LipaNamba::pretty('876543210'));
+        $this->assertSame('0764 224 477', LipaNamba::pretty('0764224477'));
+        $this->assertSame('255 764 224 477', LipaNamba::pretty('255764224477'));
     }
 
     /* ---------------------------------------------------------------- */

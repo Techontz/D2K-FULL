@@ -167,12 +167,20 @@ function CheckoutContent() {
 
   const groups = preview?.vendor_groups ?? [];
   const blocked = groups.filter((group) => !group.can_accept_orders);
+
+  // At least one seller can be paid. A basket also holding an unconfigured
+  // store still checks out — that store's items simply stay behind.
   const canPlaceOrder = preview?.can_place_order === true;
   const deliveryFee = preview?.delivery.status === "quoted" ? preview.delivery.amount : null;
 
-  // The server's figure while we have one, the basket's own arithmetic only as
-  // a first-paint stand-in. Either way nothing is added on top of the goods.
-  const total = preview?.total ?? cart.subtotal;
+  // Exactly the products this order will cover, decided by the server.
+  const payableIds = preview?.payable_product_ids ?? [];
+
+  // The figures describe what is actually being ordered, not the whole basket.
+  // Showing the full subtotal above a part-order would overstate what the
+  // shopper is about to commit to.
+  const orderSubtotal = preview?.payable_subtotal ?? cart.subtotal;
+  const total = preview?.payable_total ?? cart.subtotal;
 
   if (cart.ready && cart.lines.length === 0) {
     return (
@@ -201,15 +209,25 @@ function CheckoutContent() {
     // the shopper is filling the form in.
     if (!(await requireAuth())) return;
 
+    // Only what the server said can be paid for. Items from a seller with no
+    // till stay in the basket rather than being ordered with nowhere to send
+    // the money, or silently thrown away.
+    const ordering = new Set(payableIds);
+    const items = cart.lines
+      .filter((line) => ordering.has(line.product.id))
+      .map((line) => ({ product_id: line.product.id, quantity: line.quantity }));
+
+    if (items.length === 0) {
+      setError(t("checkout.nothingPayable"));
+      return;
+    }
+
     setPlacing(true);
     setError(null);
 
     try {
       const result = await shop.placeOrder({
-        items: cart.lines.map((line) => ({
-          product_id: line.product.id,
-          quantity: line.quantity,
-        })),
+        items,
         delivery_address: address.trim(),
         customer_phone: phone.trim(),
         payment_method: payment,
@@ -217,7 +235,10 @@ function CheckoutContent() {
         delivery_longitude: coords?.longitude ?? null,
       });
 
-      cart.clear();
+      // Remove only what was ordered. cart.clear() would take the unpayable
+      // items with it, and the shopper would lose them without being told.
+      items.forEach((item) => cart.remove(item.product_id));
+
       router.push(`/account/orders?placed=${encodeURIComponent(result.reference)}`);
     } catch (err) {
       setError(apiError(err, t("checkout.failed")));
@@ -340,7 +361,7 @@ function CheckoutContent() {
               <PaymentOption
                 checked
                 title={t("payment.lipaNamba")}
-                body={t("payment.lipaNambaHint")}
+                body={t("payment.payDirectly")}
               />
 
               {/* Shown so shoppers know it is coming, but not selectable —
@@ -410,17 +431,26 @@ function CheckoutContent() {
                         <span className="block text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
                           {t("payment.lipaNamba")}
                         </span>
-                        {/* break-all, not nowrap: a twelve-digit till must
+
+                        {/* The number is the single thing on this page the
+                            shopper has to get into their phone's dialler
+                            correctly, so it is the largest thing on the card
+                            and it can be copied rather than transcribed.
+
+                            break-all, not nowrap: a twelve-digit till has to
                             wrap inside a 320px column rather than push the
-                            page sideways. */}
-                        <span className="block break-all font-mono text-[19px] font-black leading-tight tracking-wide">
-                          {group.lipa_namba_display ?? group.lipa_namba}
-                        </span>
+                            page sideways. min-w-0 lets it. */}
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="min-w-0 flex-1 break-all font-mono text-[22px] font-black leading-tight tracking-wide">
+                            {group.lipa_namba_display ?? group.lipa_namba}
+                          </span>
+                          <CopyButton value={group.lipa_namba} />
+                        </div>
                       </div>
                     ) : (
                       <div className="mt-2">
                         <p className="text-[12px] font-bold text-[color:var(--color-sale)]">
-                          {group.blocked_reason ?? t("payment.notSetUp")}
+                          {t("payment.notSetUp")}
                         </p>
                         <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]">
                           {t("payment.notSetUpHint")}
@@ -465,7 +495,7 @@ function CheckoutContent() {
             <dl className="space-y-2 text-[13px]">
               <div className="flex justify-between gap-3">
                 <dt className="text-[color:var(--color-ink-muted)]">{t("cart.subtotal")}</dt>
-                <dd className="font-semibold">{formatMoney(cart.subtotal)}</dd>
+                <dd className="font-semibold">{formatMoney(orderSubtotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="min-w-0 text-[color:var(--color-ink-muted)]">{t("cart.delivery")}</dt>
@@ -505,12 +535,14 @@ function CheckoutContent() {
               </p>
             ) : null}
 
+            {/* A notice, not a blocker. These items are staying in the
+                basket; everything else is still ordered. */}
             {blocked.length > 0 ? (
               <div
-                role="alert"
-                className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--color-sale)] bg-red-50 px-3 py-2"
+                role="status"
+                className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--color-warn)] bg-[color:var(--color-warn-soft)] px-3 py-2"
               >
-                <p className="text-[12px] font-extrabold text-[color:var(--color-sale)]">
+                <p className="text-[12px] font-extrabold text-[color:var(--color-warn)]">
                   {t("checkout.blockedTitle")}
                 </p>
                 <ul className="mt-1 space-y-1">
@@ -519,7 +551,8 @@ function CheckoutContent() {
                       key={group.vendor_id ?? group.vendor_name}
                       className="text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]"
                     >
-                      {group.blocked_reason}
+                      {t("payment.partialBlocked", { vendor: group.vendor_name })}{" "}
+                      {t("payment.notSetUpHint")}
                     </li>
                   ))}
                 </ul>
@@ -566,6 +599,63 @@ function CheckoutContent() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Copies a till number to the clipboard.
+ *
+ * Worth a control of its own because the alternative is a shopper reading a
+ * nine-digit number off one app and typing it into another, which is exactly
+ * the moment a payment goes to the wrong till.
+ *
+ * Copies the raw digits rather than the spaced display form — a dialler will
+ * not accept the spaces. Falls back to selecting nothing and saying nothing if
+ * the Clipboard API is unavailable or refused: the number is still on screen
+ * and readable, so a failed copy is not worth an error message.
+ */
+function CopyButton({ value }: { value: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+        } catch {
+          /* nothing to do — the number is on screen either way */
+        }
+      }}
+      // h-11 and shrink-0: a thumb target that survives a 320px column.
+      className="flex h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] px-3 text-[12px] font-bold transition-colors hover:bg-[color:var(--color-surface-alt)]"
+      aria-live="polite"
+    >
+      {copied ? (
+        <>
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          {t("payment.copied")}
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          {t("payment.copy")}
+        </>
+      )}
+    </button>
   );
 }
 

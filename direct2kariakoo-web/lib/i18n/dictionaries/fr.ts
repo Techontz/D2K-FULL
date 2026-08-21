@@ -227,6 +227,7 @@ export const fr: Dictionary = {
   },
 
   checkout: {
+    nothingPayable: "Aucun vendeur de votre panier ne peut encore encaisser. Retirez leurs articles ou réessayez plus tard.",
     title: "Commande",
     deliveryDetails: "Informations de livraison",
     deliveryAddress: "Adresse de livraison",
@@ -259,6 +260,10 @@ export const fr: Dictionary = {
   },
 
   payment: {
+    copy: "Copier",
+    copied: "Copié",
+    payDirectly: "Payez directement le vendeur",
+    partialBlocked: "Les articles de {vendor} ne sont pas inclus dans cette commande.",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Payez chaque vendeur directement sur son propre Lipa Namba.",
     instructions: "Envoyez à chaque vendeur le montant indiqué ci-dessous sur son Lipa Namba, puis conservez le SMS de confirmation comme reçu.",
@@ -392,7 +397,7 @@ export const fr: Dictionary = {
   },
 
   auth: {
-    popupBlocked: "Votre navigateur a bloqué la fenêtre Google. Autorisez les pop-ups et réessayez.",
+    redirectingToGoogle: "Redirection vers Google…",
     googleUnavailable: "La connexion Google n'est pas encore disponible sur ce site.",
     or: "ou",
     continueWithGoogle: "Continuer avec Google",

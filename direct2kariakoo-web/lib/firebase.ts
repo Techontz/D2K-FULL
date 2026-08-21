@@ -1,5 +1,11 @@
 import { type FirebaseApp, getApps, initializeApp } from "firebase/app";
-import { GoogleAuthProvider, getAuth, signInWithPopup, type Auth } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getAuth,
+  getRedirectResult,
+  signInWithRedirect,
+  type Auth,
+} from "firebase/auth";
 
 /**
  * Firebase Authentication for the storefront.
@@ -15,9 +21,38 @@ import { GoogleAuthProvider, getAuth, signInWithPopup, type Auth } from "firebas
  * domains and by our own server-side token verification. No service-account
  * key is ever present on the client.
  */
+/**
+ * Where Firebase's `/__/auth/handler` lives.
+ *
+ * By default this is the project's own `*.firebaseapp.com` domain, which is a
+ * different origin from the storefront. That is fine in Chrome but not in
+ * Safari: a browser that partitions third-party storage will not let the
+ * handler hand the result back across origins, and `getRedirectResult()`
+ * quietly resolves to null.
+ *
+ * Setting NEXT_PUBLIC_FIREBASE_AUTH_PROXY=1 serves the handler from this
+ * site's own origin instead — next.config.js rewrites /__/auth/* through to
+ * Firebase — which removes the cross-origin hop entirely and makes redirect
+ * sign-in work in Safari and iOS.
+ *
+ * It is off by default because turning it on changes the OAuth redirect_uri,
+ * and Google rejects a redirect_uri that is not registered. See
+ * DEPLOY-GOOGLE-REDIRECT.txt for the one console entry it needs.
+ */
+function authDomain(): string | undefined {
+  const configured = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+
+  if (process.env.NEXT_PUBLIC_FIREBASE_AUTH_PROXY !== "1") return configured;
+  // Server-side render has no host to borrow; the value is only ever used in
+  // the browser, and the browser re-reads it on mount.
+  if (typeof window === "undefined") return configured;
+
+  return window.location.host;
+}
+
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  authDomain: authDomain(),
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
@@ -44,12 +79,18 @@ export function firebaseAuth(): Auth | undefined {
 }
 
 /**
- * Runs Google sign-in and returns the Firebase ID token.
+ * Hands the browser to Google.
  *
- * The token is all that leaves this module — the caller posts it to Laravel,
- * which verifies the signature before believing any claim inside it.
+ * This is a full-page navigation, not a popup. A popup is a window the user
+ * did not ask for, and Chrome blocks it often enough that the sign-in button
+ * had grown an error message asking people to go and change their browser
+ * settings — which is not a thing to ask of someone trying to buy a phone.
+ *
+ * Nothing is returned because nothing comes back: the page is gone by the time
+ * this settles. The other half of the flow is completeGoogleRedirect(), which
+ * runs when Google sends the browser back.
  */
-export async function signInWithGoogle(): Promise<string> {
+export async function startGoogleRedirect(): Promise<void> {
   const auth = firebaseAuth();
 
   if (!auth) {
@@ -61,7 +102,24 @@ export async function signInWithGoogle(): Promise<string> {
   // last person's Google account.
   provider.setCustomParameters({ prompt: "select_account" });
 
-  const credential = await signInWithPopup(auth, provider);
+  await signInWithRedirect(auth, provider);
+}
+
+/**
+ * Picks up the result after Google sends the browser back, and returns the
+ * Firebase ID token — or null when this page load is not a return from Google,
+ * which is the overwhelmingly common case.
+ *
+ * The token is all that leaves this module. The caller posts it to Laravel,
+ * which verifies the signature before believing any claim inside it.
+ */
+export async function completeGoogleRedirect(): Promise<string | null> {
+  const auth = firebaseAuth();
+  if (!auth) return null;
+
+  const credential = await getRedirectResult(auth);
+  if (!credential) return null;
+
   return credential.user.getIdToken();
 }
 

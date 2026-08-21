@@ -66,9 +66,16 @@ class LipaNamba
     /**
      * The number as a customer should read it off the screen.
      *
-     * Grouped in threes from the left, which is how tills are printed on
-     * shopfront signage in Kariakoo. Short numbers are left alone — grouping
-     * a five-digit till makes it harder to read, not easier.
+     * Grouped in threes from the *right*, so the groups line up the way people
+     * read numbers aloud. Grouping from the left instead leaves whatever is
+     * left over stranded at the end — an eight-digit till came out as
+     * "876 543 21", which is harder to read than not grouping at all.
+     *
+     * A leftover single digit at the front is folded into the next group for
+     * the same reason: "0 764 224 477" is worse than "0764 224 477".
+     *
+     * Short numbers are left alone — grouping a five-digit till makes it
+     * harder to read, not easier.
      */
     public static function pretty(?string $raw): ?string
     {
@@ -82,6 +89,15 @@ class LipaNamba
             return $digits;
         }
 
-        return trim(implode(' ', str_split($digits, 3)));
+        // str_split pads the last group; reversing first makes it pad the
+        // first group instead, which is the one allowed to be short.
+        $groups = array_reverse(array_map('strrev', str_split(strrev($digits), 3)));
+
+        if (count($groups) > 1 && strlen($groups[0]) === 1) {
+            $groups[1] = $groups[0] . $groups[1];
+            array_shift($groups);
+        }
+
+        return implode(' ', $groups);
     }
 }

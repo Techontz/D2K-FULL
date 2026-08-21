@@ -82,6 +82,11 @@ class OrderController extends Controller
                     // cleared their till number in between. Without it there is
                     // nowhere for this money to go, and falling back to any
                     // other vendor's number would pay the wrong shop.
+                    //
+                    // The storefront only ever submits items it was told are
+                    // payable, so reaching this abort means the basket went
+                    // stale — the shopper is sent back to a re-priced checkout
+                    // rather than having a part-order forced through here.
                     $vendor = $product->vendor;
 
                     if ($blocked = CheckoutBuilder::blockedReason($vendor)) {

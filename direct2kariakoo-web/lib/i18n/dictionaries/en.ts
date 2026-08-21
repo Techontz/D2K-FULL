@@ -234,6 +234,7 @@ export const en = {
   },
 
   checkout: {
+    nothingPayable: "None of the sellers in your basket can take payment yet. Please remove their items or try again later.",
     title: "Checkout",
     deliveryDetails: "Delivery details",
     deliveryAddress: "Delivery address",
@@ -266,6 +267,10 @@ export const en = {
   },
 
   payment: {
+    copy: "Copy",
+    copied: "Copied",
+    payDirectly: "Pay directly to the seller",
+    partialBlocked: "Items from {vendor} are not included in this order.",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Pay each seller directly on their own Lipa Namba.",
     instructions: "Send each seller the amount shown below on their Lipa Namba, then keep the confirmation SMS as your receipt.",
@@ -399,7 +404,7 @@ export const en = {
   },
 
   auth: {
-    popupBlocked: "Your browser blocked the Google window. Allow pop-ups and try again.",
+    redirectingToGoogle: "Redirecting to Google…",
     googleUnavailable: "Google sign-in is not available on this site yet.",
     or: "or",
     continueWithGoogle: "Continue with Google",

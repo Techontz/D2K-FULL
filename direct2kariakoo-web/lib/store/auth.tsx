@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import api, { TOKEN_KEY, USER_KEY, setToken } from "../api";
-import { signOutOfFirebase } from "../firebase";
+import { completeGoogleRedirect, firebaseConfigured, signOutOfFirebase } from "../firebase";
 import type { AuthUser } from "../types";
 
 /**
@@ -23,6 +23,10 @@ interface AuthContextValue {
   login(identifier: string, password: string): Promise<AuthUser>;
   /** Exchanges a Google ID token for a normal D2K session. Customers only. */
   loginWithGoogle(idToken: string): Promise<AuthUser>;
+  /** True while a return from Google is still being exchanged for a session. */
+  googleReturning: boolean;
+  /** Set when the exchange failed, so the sign-in sheet can explain why. */
+  googleError: string | null;
   register(payload: RegisterPayload | FormData): Promise<AuthUser>;
   /** Creates the account without signing in — used by the customer sheet. */
   signUp(payload: RegisterPayload): Promise<void>;
@@ -53,6 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [resolver, setResolver] = useState<((ok: boolean) => void) | null>(null);
+  const [googleReturning, setGoogleReturning] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
   // Restore the session from storage, then confirm it is still valid.
   useEffect(() => {
@@ -84,6 +90,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       })
       .finally(() => setReady(true));
+  }, []);
+
+  /**
+   * Finish a Google sign-in that started as a redirect.
+   *
+   * Google returns the browser to whatever page it left from, so this has to
+   * live here — above every route — rather than in the sign-in sheet, which by
+   * then no longer exists. It runs on every page load and does nothing at all
+   * unless this particular load is a return from Google.
+   *
+   * `settled` is what keeps it from looping. React 18 mounts effects twice in
+   * development, and getRedirectResult() consumes the pending result on the
+   * first call: without the guard the second call returns null, which is
+   * indistinguishable from "not a return from Google". The guard also means a
+   * failed exchange is reported once and never retried in a cycle — nothing
+   * here ever starts a new redirect, which is the other half of not looping.
+   */
+  const settled = useRef(false);
+
+  useEffect(() => {
+    if (!firebaseConfigured || settled.current) return;
+    settled.current = true;
+
+    let cancelled = false;
+
+    completeGoogleRedirect()
+      .then(async (idToken) => {
+        // Not a return from Google. The common case, and not an error.
+        if (!idToken || cancelled) return;
+
+        setGoogleReturning(true);
+
+        const { data } = await api.post("/auth/google", { id_token: idToken });
+        const account = normalise(data.user ?? data);
+
+        if (cancelled) return;
+
+        setToken(data.token ?? data.access_token);
+        window.localStorage.setItem(USER_KEY, JSON.stringify(account));
+        setUser(account);
+        window.dispatchEvent(new CustomEvent("d2k:authenticated"));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        // A seller or staff email is refused by design and its message says
+        // what to do instead, so it is surfaced rather than swallowed.
+        setGoogleError(apiErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setGoogleReturning(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // The axios interceptor fires this when a token turns out to be stale.
@@ -216,6 +277,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isVendor: user?.role === "vendor",
       login,
       loginWithGoogle,
+      googleReturning,
+      googleError,
       register,
       signUp,
       logout,
@@ -224,7 +287,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       openAuthPrompt: () => setAuthPromptOpen(true),
       closeAuthPrompt,
     }),
-    [user, ready, login, loginWithGoogle, register, signUp, logout, requireAuth, authPromptOpen, closeAuthPrompt]
+    [user, ready, login, loginWithGoogle, googleReturning, googleError, register, signUp, logout, requireAuth, authPromptOpen, closeAuthPrompt]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -234,6 +297,21 @@ export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used inside <AuthProvider>");
   return context;
+}
+
+/**
+ * The message a failed Google exchange should show.
+ *
+ * Deliberately local rather than reaching for lib/api's apiError: this module
+ * is imported by the provider that api.ts's interceptor talks back to, and a
+ * cycle between the two is not worth a shared four-line function.
+ */
+function apiErrorMessage(error: unknown): string {
+  const response = (error as { response?: { data?: { message?: string } } })?.response;
+  return (
+    response?.data?.message ??
+    "We could not complete your Google sign-in. Please try again."
+  );
 }
 
 /** The API returns the account in a few historic shapes; flatten them. */

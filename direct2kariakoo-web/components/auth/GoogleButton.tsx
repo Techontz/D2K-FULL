@@ -5,15 +5,23 @@ import { FirebaseError } from "firebase/app";
 
 import { useT } from "@/lib/i18n";
 import { apiError } from "@/lib/api";
-import { firebaseConfigured, signInWithGoogle } from "@/lib/firebase";
+import { firebaseConfigured, startGoogleRedirect } from "@/lib/firebase";
 import { useAuth } from "@/lib/store/auth";
 
 /**
  * "Continue with Google" for shoppers.
  *
- * Google → Firebase → Firebase ID token → Laravel → Sanctum. The button owns
- * only the first hop; the moment a token exists it is handed to the auth store,
- * which persists the Sanctum session exactly as a password login does.
+ * Google → Firebase → Firebase ID token → Laravel → Sanctum.
+ *
+ * This button owns only the departure. Clicking it navigates the whole page to
+ * Google; the return trip is picked up by AuthProvider, which exchanges the
+ * token and persists the Sanctum session exactly as a password login does.
+ * Nothing here waits for a result, because this page will not be alive to
+ * receive one.
+ *
+ * It used to open a popup, which Chrome blocked often enough that the failure
+ * message asked people to change their browser settings before they could buy
+ * anything. A full-page redirect is not blockable.
  *
  * The control is drawn from the storefront's own tokens — radius, border, type
  * scale — rather than Google's rendered widget, so it sits inside the existing
@@ -22,10 +30,19 @@ import { useAuth } from "@/lib/store/auth";
  */
 export function GoogleButton({ onDone }: { onDone?: () => void }) {
   const t = useT();
-  const { loginWithGoogle } = useAuth();
+  // `onDone` is kept in the signature because the sheet passes it, but a
+  // redirect never comes back to this component to call it — the session
+  // appears via AuthProvider and the sheet closes itself on `user`.
+  void onDone;
+  const { googleReturning, googleError } = useAuth();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Either this click is mid-departure, or the page is a return from Google
+  // still being exchanged for a session. Both mean "do not click again".
+  const pending = busy || googleReturning;
+  const shown = error ?? googleError;
 
   // Nothing to sign in to without configuration, so the control is hidden
   // rather than shown as a button that cannot work.
@@ -36,35 +53,19 @@ export function GoogleButton({ onDone }: { onDone?: () => void }) {
     setError(null);
 
     try {
-      const idToken = await signInWithGoogle();
-      await loginWithGoogle(idToken);
-      onDone?.();
+      // On success this never resolves — the browser has already left for
+      // Google. `busy` therefore stays true on purpose, so the button reads
+      // "Redirecting…" for the moment before the page goes.
+      await startGoogleRedirect();
     } catch (e) {
-      if (e instanceof FirebaseError) {
-        // Closing the popup is a decision, not a failure.
-        if (
-          e.code === "auth/popup-closed-by-user" ||
-          e.code === "auth/cancelled-popup-request"
-        ) {
-          return;
-        }
-
-        if (e.code === "auth/popup-blocked") {
-          setError(t("auth.popupBlocked"));
-          return;
-        }
-
-        if (e.code === "auth/unauthorized-domain") {
-          // Configuration, not user error — say so plainly.
-          setError(t("auth.googleUnavailable"));
-          return;
-        }
+      if (e instanceof FirebaseError && e.code === "auth/unauthorized-domain") {
+        // Configuration, not user error — say so plainly.
+        setError(t("auth.googleUnavailable"));
+        setBusy(false);
+        return;
       }
 
-      // A seller/staff email is refused by the backend by design; its message
-      // explains what to do instead, so it is surfaced verbatim.
       setError(apiError(e));
-    } finally {
       setBusy(false);
     }
   };
@@ -81,20 +82,20 @@ export function GoogleButton({ onDone }: { onDone?: () => void }) {
 
       <button
         type="button"
-        disabled={busy}
+        disabled={pending}
         onClick={start}
         className="flex h-11 w-full items-center justify-center gap-2.5 rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] bg-white text-sm font-bold text-[color:var(--color-ink)] transition-colors hover:bg-[color:var(--color-surface-alt)] disabled:opacity-60"
       >
         <GoogleMark />
-        {busy ? t("auth.pleaseWait") : t("auth.continueWithGoogle")}
+        {pending ? t("auth.redirectingToGoogle") : t("auth.continueWithGoogle")}
       </button>
 
-      {error ? (
+      {shown ? (
         <p
           role="alert"
           className="mt-2 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] text-[color:var(--color-sale)]"
         >
-          {error}
+          {shown}
         </p>
       ) : null}
     </div>

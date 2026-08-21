@@ -226,6 +226,7 @@ export const zh: Dictionary = {
   },
 
   checkout: {
+    nothingPayable: "您购物车中的卖家目前都无法收款。请移除其商品或稍后再试。",
     title: "结算",
     deliveryDetails: "配送信息",
     deliveryAddress: "收货地址",
@@ -258,6 +259,10 @@ export const zh: Dictionary = {
   },
 
   payment: {
+    copy: "复制",
+    copied: "已复制",
+    payDirectly: "直接向卖家付款",
+    partialBlocked: "{vendor} 的商品未包含在此订单中。",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "直接向每位卖家的 Lipa Namba 付款。",
     instructions: "请按下方金额向各位卖家的 Lipa Namba 付款，并保留确认短信作为凭证。",
@@ -390,7 +395,7 @@ export const zh: Dictionary = {
   },
 
   auth: {
-    popupBlocked: "浏览器拦截了 Google 窗口。请允许弹出窗口后重试。",
+    redirectingToGoogle: "正在跳转到 Google…",
     googleUnavailable: "本站尚未启用 Google 登录。",
     or: "或",
     continueWithGoogle: "使用 Google 继续",

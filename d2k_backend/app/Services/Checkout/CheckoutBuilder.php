@@ -86,6 +86,25 @@ class CheckoutBuilder
             array_map(fn (array $group) => $group['blocked_reason'], $vendorGroups),
         ));
 
+        // One seller without a till must not hold the rest of the basket
+        // hostage. The order goes ahead for everyone who *can* be paid, and the
+        // items that cannot be are named and left in the basket rather than
+        // silently dropped or silently ordered.
+        $payable = array_values(array_filter(
+            $vendorGroups,
+            fn (array $group) => $group['can_accept_orders'],
+        ));
+
+        $payableIds = [];
+        $payableSubtotal = 0.0;
+
+        foreach ($payable as $group) {
+            $payableSubtotal += $group['subtotal'];
+            foreach ($group['items'] as $item) {
+                $payableIds[] = $item['product_id'];
+            }
+        }
+
         return [
             'currency'  => 'TZS',
             'subtotal'  => round($subtotal, 2),
@@ -97,7 +116,18 @@ class CheckoutBuilder
             'total'     => round($subtotal + (float) ($delivery->amount ?? 0), 2),
 
             'vendor_groups'   => $vendorGroups,
-            'can_place_order' => $vendorGroups !== [] && $blocked === [] && $missing === [],
+
+            // What the shopper can actually order right now, and what it costs.
+            // The storefront submits exactly these product ids.
+            'payable_product_ids' => $payableIds,
+            'payable_subtotal'    => round($payableSubtotal, 2),
+            'payable_total'       => round($payableSubtotal + (float) ($delivery->amount ?? 0), 2),
+
+            // True when at least one seller can be paid. It is deliberately not
+            // "every seller can be paid": that spelling meant a single
+            // unconfigured store made the whole checkout button dead.
+            'can_place_order' => $payable !== [],
+
             'issues'          => $blocked,
             'missing_products' => $missing,
         ];

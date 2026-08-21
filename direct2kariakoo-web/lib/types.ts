@@ -299,6 +299,13 @@ export interface CheckoutPreview {
   };
   total: number;
   vendor_groups: CheckoutVendorGroup[];
+
+  /** Exactly the products that can be ordered now; the storefront submits these. */
+  payable_product_ids: number[];
+  payable_subtotal: number;
+  payable_total: number;
+
+  /** True when at least one seller can be paid — not when every seller can. */
   can_place_order: boolean;
   issues: string[];
   missing_products: number[];

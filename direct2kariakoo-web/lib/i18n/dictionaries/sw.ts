@@ -234,6 +234,7 @@ export const sw: Dictionary = {
   },
 
   checkout: {
+    nothingPayable: "Hakuna muuzaji kwenye kikapu chako anayeweza kupokea malipo kwa sasa. Tafadhali ondoa bidhaa zake au jaribu tena baadaye.",
     title: "Malipo",
     deliveryDetails: "Taarifa za usafirishaji",
     deliveryAddress: "Anwani ya kupeleka",
@@ -266,6 +267,10 @@ export const sw: Dictionary = {
   },
 
   payment: {
+    copy: "Nakili",
+    copied: "Imenakiliwa",
+    payDirectly: "Mlipe muuzaji moja kwa moja",
+    partialBlocked: "Bidhaa za {vendor} hazijajumuishwa kwenye oda hii.",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Mlipe kila muuzaji moja kwa moja kwenye Lipa Namba yake.",
     instructions: "Tuma kila muuzaji kiasi kilichoonyeshwa hapa chini kwenye Lipa Namba yake, kisha hifadhi ujumbe wa uthibitisho kama risiti yako.",
@@ -399,7 +404,7 @@ export const sw: Dictionary = {
   },
 
   auth: {
-    popupBlocked: "Kivinjari chako kimezuia dirisha la Google. Ruhusu madirisha ibukizi kisha jaribu tena.",
+    redirectingToGoogle: "Inakupeleka Google…",
     googleUnavailable: "Kuingia kwa Google bado hakupatikani kwenye tovuti hii.",
     or: "au",
     continueWithGoogle: "Endelea na Google",
