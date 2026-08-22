@@ -23,12 +23,6 @@ export interface VendorProfile {
   is_approved: boolean;
   since: string | null;
 
-  /** The till customers pay this store on. Null until the seller sets one. */
-  lipa_namba: string | null;
-  lipa_namba_display: string | null;
-  has_lipa_namba: boolean;
-  /** Approved *and* payable. False here means checkout refuses this store. */
-  can_accept_orders: boolean;
 }
 
 export interface VendorStats {

@@ -234,8 +234,7 @@ export const sw: Dictionary = {
   },
 
   checkout: {
-    paymentSetupUpdating: "Mfumo wa malipo unasasishwa na hauwezi kupokea oda kwa dakika chache. Kikapu chako kimehifadhiwa — tafadhali jaribu tena hivi punde.",
-    nothingPayable: "Hakuna muuzaji kwenye kikapu chako anayeweza kupokea malipo kwa sasa. Tafadhali ondoa bidhaa zake au jaribu tena baadaye.",
+    sellersInOrder: "Wauzaji katika oda hii",
     title: "Malipo",
     deliveryDetails: "Taarifa za usafirishaji",
     deliveryAddress: "Anwani ya kupeleka",
@@ -250,7 +249,6 @@ export const sw: Dictionary = {
     payment: "Malipo",
     paymentInstructions: "Maelekezo ya malipo",
     pricingUnavailable: "Hatukuweza kubaini nani wa kulipwa kwa kikapu hiki. Tafadhali onyesha upya, au jaribu tena baada ya muda — kikapu chako kimehifadhiwa.",
-    blockedTitle: "Muuzaji mmoja bado hawezi kulipwa",
     deliveryPendingNote: "Usafirishaji haujajumuishwa kwenye jumla hii bado — hupigwa hesabu kwa umbali wa anwani yako na huthibitishwa baada ya kuweka oda.",
     yourItems: "Bidhaa zako ({count})",
     summary: "Muhtasari",
@@ -268,17 +266,16 @@ export const sw: Dictionary = {
   },
 
   payment: {
+    accountName: "Jina la akaunti",
+    amountToSend: "Kiasi cha kutuma",
+    oneNumberHint: "Tuma kiasi kilicho hapa chini kwenye Lipa Namba hii, kisha hifadhi ujumbe wa uthibitisho kama risiti yako.",
+    coversAllSellers: "Malipo haya moja yanahusu kila kitu kwenye oda yako, ikiwemo bidhaa za wauzaji wote {count}. Hulipi kila muuzaji kivyake.",
+    unavailableRightNow: "Mfumo wa malipo unasasishwa na oda haziwezi kupokelewa kwa dakika chache. Kikapu chako kimehifadhiwa.",
     copy: "Nakili",
     copied: "Imenakiliwa",
-    payDirectly: "Mlipe muuzaji moja kwa moja",
-    partialBlocked: "Bidhaa za {vendor} hazijajumuishwa kwenye oda hii.",
+    payDirectly: "Mlipe {brand} moja kwa moja",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Mlipe kila muuzaji moja kwa moja kwenye Lipa Namba yake.",
-    instructions: "Tuma kila muuzaji kiasi kilichoonyeshwa hapa chini kwenye Lipa Namba yake, kisha hifadhi ujumbe wa uthibitisho kama risiti yako.",
-    payTo: "Mlipe",
-    notSetUp: "Muuzaji huyu bado hajaweka Lipa Namba yake.",
-    notSetUpHint: "Hatuwezi kupokea malipo ya bidhaa zake mpaka aweke. Ziondoe kwenye kikapu chako, au wasiliana na muuzaji.",
-    amountDue: "Kiasi cha kulipa",
     mobileMoney: "Pesa ya simu",
     mobileMoneyHint: "Lipa sasa kwa M-Pesa, Tigo Pesa, Airtel Money au Halopesa.",
     comingSoon: "Inakuja hivi karibuni",
@@ -291,6 +288,7 @@ export const sw: Dictionary = {
   },
 
   orders: {
+    awaitingPayment: "Inasubiri malipo — tuma kiasi kilicho hapo juu ili kukamilisha oda hii.",
     signInTitle: "Ingia ili kuona oda zako",
     signInHint: "Historia ya oda zako imeunganishwa na akaunti yako.",
     emptyHintLong: "Ukiweka oda itaonekana hapa pamoja na hali ya usafirishaji.",

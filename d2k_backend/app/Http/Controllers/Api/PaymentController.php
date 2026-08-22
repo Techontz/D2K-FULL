@@ -355,12 +355,6 @@ class PaymentController extends Controller
                         'id' => $vendor->id,
                         'name' => $vendor->business_name ?? $vendor->user->name ?? 'Unnamed Vendor',
 
-                        // This seller's own till, and only ever theirs. Null
-                        // when they have not set one up — never blank, and
-                        // never borrowed from another vendor in the basket.
-                        'lipa_namba' => $vendor->resolveLipaNamba(),
-                        'lipa_namba_display' => \App\Support\LipaNamba::pretty($vendor->resolveLipaNamba()),
-                        'can_accept_orders' => $vendor->canAcceptOrders(),
 
                         'payment_options' => $paymentOptions,
                     ],

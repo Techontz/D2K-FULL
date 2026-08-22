@@ -234,18 +234,25 @@ export interface OrderItem {
 }
 
 /**
- * Who to pay for one seller's share of an order.
+ * Who the customer pays, and how much — one recipient for the whole order.
  *
- * Read off the order, not off the seller's current profile: the number is
- * snapshotted when the order is placed, so a seller who changes their till
- * next month does not rewrite what a past customer was told to pay.
+ * Read off the order rather than off current settings: the number is
+ * snapshotted when the order is placed, so an administrator changing the
+ * marketplace till later does not rewrite what a past customer was told.
  */
-export interface VendorPayment {
-  vendor_id: number;
-  vendor_name: string;
-  /** Null on orders placed before Lipa Namba existed. */
+export interface OrderPayment {
+  /** Null on orders placed before central payment existed. */
   lipa_namba: string | null;
   lipa_namba_display: string | null;
+  account_name: string | null;
+  /** One payment covers the whole order, however many sellers it spans. */
+  amount: number;
+}
+
+/** One seller's share of an order. Presentation only — never payment routing. */
+export interface VendorBreakdown {
+  vendor_id: number;
+  vendor_name: string;
   subtotal: number;
   item_count: number;
 }
@@ -264,19 +271,17 @@ export interface Order {
   payment_method: string | null;
   delivery_address: string | null;
   customer_phone: string | null;
-  vendor_payments: VendorPayment[];
+  payment: OrderPayment;
+  /** `pending_payment` until D2K confirms the money arrived. */
+  payment_status: string;
+  vendor_breakdown: VendorBreakdown[];
   items: OrderItem[];
 }
 
-/** One seller's share of a basket, with their own till number. */
+/** One seller's share of a basket. Presentation only — payment is central. */
 export interface CheckoutVendorGroup {
   vendor_id: number | null;
   vendor_name: string;
-  /** Null when this seller has not set one up — never another seller's. */
-  lipa_namba: string | null;
-  lipa_namba_display: string | null;
-  can_accept_orders: boolean;
-  blocked_reason: string | null;
   subtotal: number;
   items: { product_id: number; name: string; quantity: number; price: number; total: number }[];
 }
@@ -298,16 +303,25 @@ export interface CheckoutPreview {
     reason: string | null;
   };
   total: number;
+
+  /**
+   * Direct2Kariakoo's own till, and the single amount to send to it. One
+   * payment covers the basket however many shops it came from.
+   */
+  payment: {
+    lipa_namba: string | null;
+    lipa_namba_display: string | null;
+    account_name: string;
+    is_payable: boolean;
+    amount: number;
+  };
+
+  /** Which shop each item comes from. Presentation, not payment routing. */
   vendor_groups: CheckoutVendorGroup[];
 
-  /** Exactly the products that can be ordered now; the storefront submits these. */
-  payable_product_ids: number[];
-  payable_subtotal: number;
-  payable_total: number;
-
-  /** True when at least one seller can be paid — not when every seller can. */
   can_place_order: boolean;
-  issues: string[];
+  /** True when the marketplace itself has no usable till configured. */
+  payment_unavailable: boolean;
   missing_products: number[];
 }
 

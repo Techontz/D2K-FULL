@@ -227,8 +227,7 @@ export const fr: Dictionary = {
   },
 
   checkout: {
-    paymentSetupUpdating: "Le paiement est en cours de mise à jour et ne peut pas accepter de commandes pendant quelques minutes. Votre panier est conservé — réessayez dans un instant.",
-    nothingPayable: "Aucun vendeur de votre panier ne peut encore encaisser. Retirez leurs articles ou réessayez plus tard.",
+    sellersInOrder: "Vendeurs de cette commande",
     title: "Commande",
     deliveryDetails: "Informations de livraison",
     deliveryAddress: "Adresse de livraison",
@@ -243,7 +242,6 @@ export const fr: Dictionary = {
     payment: "Paiement",
     paymentInstructions: "Instructions de paiement",
     pricingUnavailable: "Nous n'avons pas pu déterminer qui payer pour ce panier. Actualisez ou réessayez dans un instant — votre panier est conservé.",
-    blockedTitle: "Un vendeur ne peut pas encore être payé",
     deliveryPendingNote: "La livraison n'est pas encore incluse dans ce total — elle est calculée selon la distance jusqu'à votre adresse et confirmée après la commande.",
     yourItems: "Vos articles ({count})",
     summary: "Récapitulatif",
@@ -261,17 +259,16 @@ export const fr: Dictionary = {
   },
 
   payment: {
+    accountName: "Nom du compte",
+    amountToSend: "Montant à envoyer",
+    oneNumberHint: "Envoyez le montant ci-dessous à ce Lipa Namba, puis conservez le SMS de confirmation comme reçu.",
+    coversAllSellers: "Ce paiement unique couvre toute votre commande, y compris les articles des {count} vendeurs. Vous ne payez pas chaque vendeur séparément.",
+    unavailableRightNow: "Les paiements sont en cours de mise à jour et les commandes ne peuvent pas être prises pendant quelques minutes. Votre panier est conservé.",
     copy: "Copier",
     copied: "Copié",
-    payDirectly: "Payez directement le vendeur",
-    partialBlocked: "Les articles de {vendor} ne sont pas inclus dans cette commande.",
+    payDirectly: "Payez directement {brand}",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Payez chaque vendeur directement sur son propre Lipa Namba.",
-    instructions: "Envoyez à chaque vendeur le montant indiqué ci-dessous sur son Lipa Namba, puis conservez le SMS de confirmation comme reçu.",
-    payTo: "Payer à",
-    notSetUp: "Ce vendeur n'a pas encore configuré son Lipa Namba.",
-    notSetUpHint: "Nous ne pouvons pas encaisser ses articles tant que ce n'est pas fait. Retirez-les de votre panier ou contactez le vendeur.",
-    amountDue: "Montant dû",
     mobileMoney: "Paiement mobile",
     mobileMoneyHint: "Payer avec M-Pesa, Tigo Pesa, Airtel Money ou Halopesa.",
     comingSoon: "Bientôt disponible",
@@ -284,6 +281,7 @@ export const fr: Dictionary = {
   },
 
   orders: {
+    awaitingPayment: "En attente de paiement — envoyez le montant ci-dessus pour finaliser la commande.",
     signInTitle: "Connectez-vous pour voir vos commandes",
     signInHint: "Votre historique de commandes est lié à votre compte.",
     emptyHintLong: "Vos commandes apparaîtront ici avec leur statut de livraison.",

@@ -2,23 +2,23 @@
 
 namespace App\Services\Checkout;
 
+use App\Models\PaymentSetting;
 use App\Models\Product;
-use App\Models\Vendor;
 use App\Services\Delivery\DeliveryQuoter;
-use App\Support\LipaNamba;
 
 /**
- * Turns a basket into the thing a customer actually has to act on: who they
- * are paying, what each of those sellers is owed, and where the money goes.
+ * Turns a basket into what the customer actually has to act on: one amount,
+ * paid once, to Direct2Kariakoo.
  *
- * A D2K basket routinely spans several stores, and each store has its own
- * till. Presenting one merged "pay this" figure would be wrong in the most
- * expensive way possible — the customer pays one seller for everyone's goods
- * and the rest are never paid at all. So the basket is grouped by vendor and
- * every group carries its own Lipa Namba.
+ * This used to group the basket by seller and hand back a till number for each
+ * one. A customer buying from three shops was shown three numbers and asked to
+ * make three transfers — which nobody does, and which leaves an order that
+ * cannot be reconciled because it was paid in pieces to people D2K has no
+ * record of receiving from.
  *
- * Used by the checkout preview and by the order guard, so the customer cannot
- * be shown one set of rules and then judged by another.
+ * The vendor grouping is still built, because the customer should see which
+ * shop each item comes from and sellers are still paid per line. But there is
+ * exactly one payment recipient, and it is the marketplace's own.
  */
 class CheckoutBuilder
 {
@@ -59,9 +59,10 @@ class CheckoutBuilder
             $vendorId = (int) $product->vendor_id;
 
             $groups[$vendorId] ??= [
-                'vendor'   => $product->vendor,
-                'items'    => [],
-                'subtotal' => 0.0,
+                'vendor_id'   => $product->vendor?->id,
+                'vendor_name' => $product->vendor?->business_name ?: 'Unknown seller',
+                'items'       => [],
+                'subtotal'    => 0.0,
             ];
 
             $groups[$vendorId]['items'][] = [
@@ -75,118 +76,45 @@ class CheckoutBuilder
             $groups[$vendorId]['subtotal'] += $lineTotal;
         }
 
-        $delivery = $this->quoter->quote($latitude, $longitude);
+        $delivery  = $this->quoter->quote($latitude, $longitude);
+        $recipient = PaymentSetting::current();
 
         $vendorGroups = array_values(array_map(
-            fn (array $group) => $this->presentGroup($group),
+            fn (array $group) => [
+                'vendor_id'   => $group['vendor_id'],
+                'vendor_name' => $group['vendor_name'],
+                'subtotal'    => round($group['subtotal'], 2),
+                'items'       => $group['items'],
+            ],
             $groups,
         ));
 
-        $blocked = array_values(array_filter(
-            array_map(fn (array $group) => $group['blocked_reason'], $vendorGroups),
-        ));
-
-        // One seller without a till must not hold the rest of the basket
-        // hostage. The order goes ahead for everyone who *can* be paid, and the
-        // items that cannot be are named and left in the basket rather than
-        // silently dropped or silently ordered.
-        $payable = array_values(array_filter(
-            $vendorGroups,
-            fn (array $group) => $group['can_accept_orders'],
-        ));
-
-        $payableIds = [];
-        $payableSubtotal = 0.0;
-
-        foreach ($payable as $group) {
-            $payableSubtotal += $group['subtotal'];
-            foreach ($group['items'] as $item) {
-                $payableIds[] = $item['product_id'];
-            }
-        }
+        $total = round($subtotal + (float) ($delivery->amount ?? 0), 2);
 
         return [
-            'currency'  => 'TZS',
-            'subtotal'  => round($subtotal, 2),
-            'delivery'  => $delivery->toArray(),
+            'currency' => 'TZS',
+            'subtotal' => round($subtotal, 2),
+            'delivery' => $delivery->toArray(),
 
-            // Products plus whatever delivery has been settled at. While
-            // delivery is pending this is the goods total and the storefront
-            // says as much — it never quietly folds in a placeholder fee.
-            'total'     => round($subtotal + (float) ($delivery->amount ?? 0), 2),
+            // Goods plus whatever delivery has been settled at. While delivery
+            // is pending this is the goods total and the storefront says as
+            // much — it never quietly folds in a placeholder fee.
+            'total'    => $total,
 
-            'vendor_groups'   => $vendorGroups,
+            // One recipient for the whole basket, however many sellers are in
+            // it. This is the amount the customer sends, in one payment.
+            'payment'  => $recipient->toRecipientArray() + ['amount' => $total],
 
-            // What the shopper can actually order right now, and what it costs.
-            // The storefront submits exactly these product ids.
-            'payable_product_ids' => $payableIds,
-            'payable_subtotal'    => round($payableSubtotal, 2),
-            'payable_total'       => round($payableSubtotal + (float) ($delivery->amount ?? 0), 2),
+            // Kept so the customer can see which shop each item comes from and
+            // what each is owed. It is presentation, not payment routing.
+            'vendor_groups' => $vendorGroups,
 
-            // True when at least one seller can be paid. It is deliberately not
-            // "every seller can be paid": that spelling meant a single
-            // unconfigured store made the whole checkout button dead.
-            'can_place_order' => $payable !== [],
+            // Nothing about a seller can block a sale any more; the only thing
+            // that can is the marketplace having no till configured.
+            'can_place_order' => $vendorGroups !== [] && $missing === [] && $recipient->isPayable(),
 
-            'issues'          => $blocked,
-            'missing_products' => $missing,
-        ];
-    }
-
-    /**
-     * Why this seller cannot take an order, in words the customer can act on
-     * — or null when they can.
-     *
-     * Both branches name the store, because a basket spanning four vendors
-     * needs to say which one is holding things up.
-     */
-    public static function blockedReason(?Vendor $vendor): ?string
-    {
-        if (! $vendor) {
-            return 'One of these products no longer has a seller attached.';
-        }
-
-        $name = $vendor->business_name ?: 'This seller';
-
-        if (! $vendor->canPublish()) {
-            return sprintf('%s is not currently accepting orders.', $name);
-        }
-
-        if (! $vendor->hasLipaNamba()) {
-            return sprintf(
-                '%s has not set up their Lipa Namba yet, so payment for their items cannot be completed. Remove them from your basket or contact the seller.',
-                $name,
-            );
-        }
-
-        return null;
-    }
-
-    private function presentGroup(array $group): array
-    {
-        /** @var Vendor|null $vendor */
-        $vendor = $group['vendor'];
-        $reason = self::blockedReason($vendor);
-
-        // Only ever this vendor's own number, and only when it is real. A
-        // group that cannot be paid reports null rather than an empty string,
-        // so no caller can mistake "not set up" for "pay into nothing".
-        //
-        // resolveLipaNamba(), not the raw column: a seller who filed their
-        // till under the older payment-options table is still payable, and on
-        // a database where the column has not been added yet that table is the
-        // only place it can be.
-        $lipaNamba = $vendor?->resolveLipaNamba();
-
-        return [
-            'vendor_id'          => $vendor?->id,
-            'vendor_name'        => $vendor?->business_name ?: 'Unknown seller',
-            'lipa_namba'         => $lipaNamba,
-            'lipa_namba_display' => LipaNamba::pretty($lipaNamba),
-            'can_accept_orders'  => $reason === null,
-            'blocked_reason'     => $reason,
-            'subtotal'           => round($group['subtotal'], 2),
-            'items'              => $group['items'],
+            'payment_unavailable' => ! $recipient->isPayable(),
+            'missing_products'    => $missing,
         ];
     }
 }

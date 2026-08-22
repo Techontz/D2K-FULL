@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\Product;
-use App\Services\Checkout\CheckoutBuilder;
+use App\Models\PaymentSetting;
 use App\Services\Delivery\DeliveryQuoter;
 use App\Support\LipaNamba;
 use App\Support\Media;
@@ -65,12 +65,31 @@ class OrderController extends Controller
         $user      = $request->user();
         $reference = $this->newReference();
 
-        // Asked once rather than per line: a schema lookup is not free and a
-        // fifty-item basket should not make fifty of them.
-        $hasSnapshotColumn = Schema::hasColumn('orders', 'lipa_namba');
+        // One recipient for the whole basket. Resolved before the transaction
+        // so every line of the order records the same thing, even if an
+        // administrator saves a new number mid-checkout.
+        $recipient = PaymentSetting::current();
+
+        if (! $recipient->isPayable()) {
+            return response()->json([
+                'message' => 'Payments are temporarily unavailable. Please try again shortly — nothing has been charged and your basket is saved.',
+            ], 503);
+        }
+
+        // Built once rather than per line: schema lookups are not free and a
+        // fifty-item basket should not make fifty of them. Columns absent on
+        // this server are simply left out of the insert.
+        $snapshot = array_filter([
+            'lipa_namba'           => Schema::hasColumn('orders', 'lipa_namba') ? $recipient->payableNumber() : null,
+            'payment_account_name' => Schema::hasColumn('orders', 'payment_account_name') ? $recipient->payeeName() : null,
+            // Placing an order is not paying for it. The money is sent
+            // separately and confirmed by D2K; until then this is what stops a
+            // seller dispatching goods against nothing.
+            'payment_status'       => Schema::hasColumn('orders', 'payment_status') ? 'pending_payment' : null,
+        ], fn ($value) => $value !== null);
 
         try {
-            $result = DB::transaction(function () use ($data, $user, $reference, $hasSnapshotColumn) {
+            $result = DB::transaction(function () use ($data, $user, $reference, $snapshot) {
                 $subtotal = 0;
                 $lines    = [];
 
@@ -82,21 +101,6 @@ class OrderController extends Controller
                         abort(422, 'A product in your cart is no longer available.');
                     }
 
-                    // Checked here, inside the transaction, rather than trusting
-                    // the preview the customer saw: the seller could have
-                    // cleared their till number in between. Without it there is
-                    // nowhere for this money to go, and falling back to any
-                    // other vendor's number would pay the wrong shop.
-                    //
-                    // The storefront only ever submits items it was told are
-                    // payable, so reaching this abort means the basket went
-                    // stale — the shopper is sent back to a re-priced checkout
-                    // rather than having a part-order forced through here.
-                    $vendor = $product->vendor;
-
-                    if ($blocked = CheckoutBuilder::blockedReason($vendor)) {
-                        abort(422, $blocked);
-                    }
 
                     if ($product->stock < $item['quantity']) {
                         abort(422, sprintf(
@@ -126,17 +130,17 @@ class OrderController extends Controller
                         'external_id'      => (string) Str::uuid(),
                     ];
 
-                    // Copied, not referenced. When this seller changes their
-                    // till number next month, this order still shows the number
-                    // the customer was actually told to pay.
+                    // Copied, not referenced. When an administrator changes
+                    // the marketplace's till next month, this order still shows
+                    // the number and name the customer was actually given.
                     //
-                    // Guarded because a server can have these files before it
-                    // has run the migration. Writing a column that is not there
-                    // fails the whole insert, and nobody could buy anything
-                    // until someone noticed — losing the snapshot costs far
-                    // less than losing every sale.
-                    if ($hasSnapshotColumn) {
-                        $line['lipa_namba'] = $vendor->resolveLipaNamba();
+                    // Each guarded because a server can have these files before
+                    // it has run the migration. Writing a column that is not
+                    // there fails the whole insert, and nobody could buy
+                    // anything until someone noticed — losing a snapshot costs
+                    // far less than losing every sale.
+                    foreach ($snapshot as $column => $value) {
+                        $line[$column] = $value;
                     }
 
                     $lines[] = Order::create($line);
@@ -285,7 +289,13 @@ class OrderController extends Controller
             'payment_method'   => $first->payment_method,
             'delivery_address' => $first->delivery_address,
             'customer_phone'   => $first->customer_phone,
-            'vendor_payments'  => $this->paymentInstructions($lines),
+            'payment'          => $this->paymentRecord($first, round($subtotal + (float) ($delivery ?? 0), 2)),
+            'payment_status'   => Schema::hasColumn('orders', 'payment_status') ? ($first->payment_status ?? 'pending_payment') : 'pending_payment',
+
+            // Which shop each item came from, and what each is owed. Kept for
+            // the customer's benefit and for the sellers' own dashboards — it
+            // is not payment routing, which is a single recipient above.
+            'vendor_breakdown' => $this->vendorBreakdown($lines),
             'items'            => $lines->map(fn ($line) => [
                 'id'       => $line->id,
                 'product'  => $line->product ? [
@@ -303,38 +313,45 @@ class OrderController extends Controller
     }
 
     /**
-     * Who to pay, and how much, for each seller in this order.
+     * Who this order is paid to, as it stood on the day it was placed.
      *
-     * The Lipa Namba comes off the order line, not off the vendor record.
-     * That is the whole point of snapshotting it: a seller who changes their
-     * till number tomorrow must not retroactively change the number a
-     * customer was given today, or every past receipt becomes wrong at once.
+     * Read off the order, not off the current settings. That is the whole
+     * point of snapshotting: an administrator changing the marketplace till
+     * tomorrow must not retroactively change the number a customer was given
+     * today, or every receipt already issued becomes wrong at once.
      *
-     * Grouped by vendor because one reference can span several stores, and
-     * each is owed only their own share.
+     * Orders placed before this existed carry no snapshot, and say so rather
+     * than borrowing today's number.
      */
-    private function paymentInstructions($lines): array
+    private function paymentRecord($first, float $amount): array
+    {
+        $number = Schema::hasColumn('orders', 'lipa_namba') ? $first->lipa_namba : null;
+        $name   = Schema::hasColumn('orders', 'payment_account_name') ? $first->payment_account_name : null;
+
+        return [
+            'lipa_namba'         => $number,
+            'lipa_namba_display' => LipaNamba::pretty($number),
+            'account_name'       => $name,
+            // One payment covers the whole order, however many sellers it spans.
+            'amount'             => $amount,
+        ];
+    }
+
+    /**
+     * The order split by seller, so the customer can see which shop each item
+     * came from. Every seller sees only their own lines in their own console;
+     * this is the customer's view of the same split.
+     */
+    private function vendorBreakdown($lines): array
     {
         return $lines
             ->groupBy('vendor_id')
-            ->map(function ($vendorLines) {
-                $first = $vendorLines->first();
-
-                // Null where the column does not exist. Deliberately not
-                // falling back to the vendor's current number: that would print
-                // today's till on an order placed before it changed, which is
-                // the exact confusion the snapshot exists to prevent.
-                $stored = Schema::hasColumn('orders', 'lipa_namba') ? $first->lipa_namba : null;
-
-                return [
-                    'vendor_id'          => (int) $first->vendor_id,
-                    'vendor_name'        => $first->vendor?->business_name ?: 'Seller',
-                    'lipa_namba'         => $stored,
-                    'lipa_namba_display' => LipaNamba::pretty($stored),
-                    'subtotal'           => round((float) $vendorLines->sum('total'), 2),
-                    'item_count'         => (int) $vendorLines->sum('quantity'),
-                ];
-            })
+            ->map(fn ($vendorLines) => [
+                'vendor_id'   => (int) $vendorLines->first()->vendor_id,
+                'vendor_name' => $vendorLines->first()->vendor?->business_name ?: 'Seller',
+                'subtotal'    => round((float) $vendorLines->sum('total'), 2),
+                'item_count'  => (int) $vendorLines->sum('quantity'),
+            ])
             ->values()
             ->all();
     }

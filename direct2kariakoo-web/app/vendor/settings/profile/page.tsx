@@ -32,15 +32,8 @@ export default function VendorProfilePage() {
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
 
-  // Lipa Namba — the till customers pay this store on at checkout. Without it
-  // the store's items cannot be checked out at all, so it gets its own card
-  // rather than being buried among the optional profile fields.
-  const [lipaNamba, setLipaNamba] = useState("");
-  const [savingLipaNamba, setSavingLipaNamba] = useState(false);
-  const [lipaNambaError, setLipaNambaError] = useState<string | null>(null);
-  const [lipaNambaSaved, setLipaNambaSaved] = useState(false);
-
-  // Payment section
+  // Payment section — the seller's own recorded payment details. Kept as the
+  // reference data it always was; it is no longer what customers pay into.
   const [paymentOptions, setPaymentOptions] = useState<any[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
@@ -73,7 +66,6 @@ export default function VendorProfilePage() {
 
     fetchProfile();
     fetchPaymentTypes();
-    fetchLipaNamba();
 
     const interval = setInterval(fetchProfile, 60000);
     return () => clearInterval(interval);
@@ -173,62 +165,6 @@ export default function VendorProfilePage() {
       fetchProfile();
     } catch {
       alert("Update failed");
-    }
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /* 🏦 Lipa Namba                                                              */
-  /* -------------------------------------------------------------------------- */
-  /**
-   * Read from the seller-status endpoint, not from `/me`.
-   *
-   * `/me` hands back the raw vendor row. Where the till is filed under the
-   * older payment-options table — which is the case on any database that has
-   * not had the dedicated column added — that row simply has no number on it,
-   * and reading from there blanked the field the seller had just filled in.
-   * The status endpoint resolves whichever of the two places holds it.
-   */
-  async function fetchLipaNamba() {
-    try {
-      const res = await api.get("/shop/seller/status");
-      setLipaNamba(res.data?.store?.lipa_namba || "");
-    } catch {
-      // Leave whatever is in the field; the seller can still save.
-    }
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /* 💾 Save Lipa Namba                                                         */
-  /* -------------------------------------------------------------------------- */
-  /**
-   * Saved through the seller-store endpoint, which validates the number
-   * against Tanzanian till formats and stores it normalised. The reason it is
-   * not just another free-text profile field: a mistyped Lipa Namba sends a
-   * customer's money to a stranger, and nobody would find out until the seller
-   * asked where their payment was.
-   */
-  async function handleSaveLipaNamba() {
-    setSavingLipaNamba(true);
-    setLipaNambaError(null);
-    setLipaNambaSaved(false);
-
-    try {
-      const res = await api.post("/shop/seller/store", { lipa_namba: lipaNamba.trim() });
-      // Show it back in the normalised form the server actually stored, so the
-      // seller sees exactly what a customer will be shown.
-      setLipaNamba(res.data?.store?.lipa_namba || "");
-      setLipaNambaSaved(true);
-      // Refreshes name/phone/logo. It no longer touches the till number, so it
-      // cannot overwrite what was just saved.
-      fetchProfile();
-    } catch (err: any) {
-      setLipaNambaError(
-        err?.response?.data?.errors?.lipa_namba?.[0] ||
-          err?.response?.data?.message ||
-          "Could not save your Lipa Namba. Please try again.",
-      );
-    } finally {
-      setSavingLipaNamba(false);
     }
   }
 
@@ -413,74 +349,10 @@ export default function VendorProfilePage() {
           }
         />
 
-        {/* ---- Lipa Namba ----
-
-            The one payment detail checkout actually depends on. It sits above
-            the older payment-options list because that list is informational,
-            while this is the number a customer is shown and pays into. */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <CreditCard className="w-5 h-5 text-yellow-600" />
-            <h4 className="text-sm font-medium text-gray-800">Payment Details</h4>
-          </div>
-
-          <label htmlFor="lipa-namba" className="block text-sm font-semibold text-gray-900 mt-3">
-            Lipa Namba
-          </label>
-          <p className="text-xs text-gray-600 mt-0.5">
-            Enter the number customers should use to pay you.
-          </p>
-
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              id="lipa-namba"
-              value={lipaNamba}
-              onChange={(e) => {
-                setLipaNamba(e.target.value);
-                setLipaNambaSaved(false);
-                setLipaNambaError(null);
-              }}
-              // Numeric keypad on a phone: this field only ever takes digits.
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="e.g. 123456"
-              maxLength={32}
-              aria-invalid={lipaNambaError ? true : undefined}
-              aria-describedby={lipaNambaError ? "lipa-namba-error" : undefined}
-              // min-w-0 so the field shrinks inside the row on a 320px screen
-              // instead of pushing the card past the viewport.
-              //
-              // flex-1 is scoped to sm and up on purpose. The row is a column
-              // on a phone, where `flex: 1 1 0%` sets a zero *height* basis and
-              // collapses the field to 23px — half the 44px touch target the
-              // rest of the console uses. It only ever meant "share the width",
-              // so it belongs with the horizontal layout.
-              className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-[15px] outline-none transition focus:border-yellow-500 sm:flex-1"
-            />
-            <button
-              type="button"
-              onClick={handleSaveLipaNamba}
-              disabled={savingLipaNamba}
-              className="h-11 shrink-0 rounded-xl bg-yellow-500 px-5 text-sm font-semibold text-black transition hover:bg-yellow-600 disabled:opacity-60 sm:w-auto"
-            >
-              {savingLipaNamba ? "Saving…" : "Save"}
-            </button>
-          </div>
-
-          {lipaNambaError ? (
-            <p id="lipa-namba-error" role="alert" className="mt-2 text-xs font-semibold text-red-600">
-              {lipaNambaError}
-            </p>
-          ) : lipaNambaSaved ? (
-            <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-green-600">
-              <Check size={13} /> Saved. Customers will see this number when they buy from you.
-            </p>
-          ) : !lipaNamba ? (
-            <p className="mt-2 text-xs font-semibold text-amber-600">
-              Until you add this, customers cannot complete a purchase from your store.
-            </p>
-          ) : null}
-        </div>
+        {/* Sellers do not enter a payment number. Customers pay
+            Direct2Kariakoo's single Lipa Namba, set by an administrator, and
+            D2K settles with each seller afterwards — a basket spanning three
+            shops is one payment, not three. */}
 
         {/* Payment Options */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">

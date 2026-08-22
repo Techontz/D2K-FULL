@@ -226,8 +226,7 @@ export const zh: Dictionary = {
   },
 
   checkout: {
-    paymentSetupUpdating: "结算功能正在更新，几分钟内无法接受订单。您的购物车已保存——请稍后重试。",
-    nothingPayable: "您购物车中的卖家目前都无法收款。请移除其商品或稍后再试。",
+    sellersInOrder: "本订单的卖家",
     title: "结算",
     deliveryDetails: "配送信息",
     deliveryAddress: "收货地址",
@@ -242,7 +241,6 @@ export const zh: Dictionary = {
     payment: "支付方式",
     paymentInstructions: "付款说明",
     pricingUnavailable: "无法确定此购物车的收款方。请刷新或稍后重试——您的购物车已保存。",
-    blockedTitle: "有一位卖家暂时无法收款",
     deliveryPendingNote: "此总额尚未包含运费——运费按到您地址的距离计算，下单后确认。",
     yourItems: "您的商品（{count}）",
     summary: "订单摘要",
@@ -260,17 +258,16 @@ export const zh: Dictionary = {
   },
 
   payment: {
+    accountName: "账户名称",
+    amountToSend: "应付金额",
+    oneNumberHint: "请按下方金额向该 Lipa Namba 付款，并保留确认短信作为凭证。",
+    coversAllSellers: "这一笔付款涵盖订单中的全部商品，包括来自 {count} 位卖家的商品。您无需分别向各卖家付款。",
+    unavailableRightNow: "支付功能正在更新，几分钟内无法接受订单。您的购物车已保存。",
     copy: "复制",
     copied: "已复制",
-    payDirectly: "直接向卖家付款",
-    partialBlocked: "{vendor} 的商品未包含在此订单中。",
+    payDirectly: "直接向 {brand} 付款",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "直接向每位卖家的 Lipa Namba 付款。",
-    instructions: "请按下方金额向各位卖家的 Lipa Namba 付款，并保留确认短信作为凭证。",
-    payTo: "付款给",
-    notSetUp: "该卖家尚未设置 Lipa Namba。",
-    notSetUpHint: "在此之前无法为其商品收款。请将其从购物车中移除，或联系卖家。",
-    amountDue: "应付金额",
     mobileMoney: "手机支付",
     mobileMoneyHint: "使用 M-Pesa、Tigo Pesa、Airtel Money 或 Halopesa 支付。",
     comingSoon: "即将推出",
@@ -282,6 +279,7 @@ export const zh: Dictionary = {
   },
 
   orders: {
+    awaitingPayment: "等待付款——请按上方金额付款以完成此订单。",
     signInTitle: "登录以查看订单",
     signInHint: "您的订单记录与账户绑定。",
     emptyHintLong: "下单后订单及其配送状态会显示在这里。",

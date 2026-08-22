@@ -161,9 +161,27 @@ class OrderResource extends Resource
                     })
                     ->toggleable(),
 
+                // Placing an order is not paying for it: the customer sends
+                // the money separately and somebody here confirms it arrived.
+                // Without this column an admin cannot tell the two apart.
+                Tables\Columns\TextColumn::make('payment_status')
+                    ->label('Payment')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'pending_payment' => 'Awaiting payment',
+                        'paid'            => 'Paid',
+                        default           => $state ?: '—',
+                    })
+                    ->color(fn (?string $state) => match ($state) {
+                        'paid'            => 'success',
+                        'pending_payment' => 'warning',
+                        default           => 'gray',
+                    })
+                    ->toggleable(),
+
                 // The number this customer was actually told to pay, as it
-                // stood on the day. Read off the order, not the vendor, so a
-                // seller changing their till does not rewrite history.
+                // stood on the day. Read off the order, not off the current
+                // settings, so changing the till does not rewrite history.
                 Tables\Columns\TextColumn::make('lipa_namba')
                     ->label('Paid to')
                     ->formatStateUsing(fn (?string $state) => \App\Support\LipaNamba::pretty($state) ?? '—')

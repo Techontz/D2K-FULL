@@ -234,8 +234,7 @@ export const en = {
   },
 
   checkout: {
-    paymentSetupUpdating: "Checkout is being updated and cannot take orders for a few minutes. Your basket is saved — please try again shortly.",
-    nothingPayable: "None of the sellers in your basket can take payment yet. Please remove their items or try again later.",
+    sellersInOrder: "Sellers in this order",
     title: "Checkout",
     deliveryDetails: "Delivery details",
     deliveryAddress: "Delivery address",
@@ -250,7 +249,6 @@ export const en = {
     payment: "Payment",
     paymentInstructions: "Payment instructions",
     pricingUnavailable: "We could not work out who to pay for this basket. Please refresh, or try again in a moment — your basket is saved.",
-    blockedTitle: "One seller cannot be paid yet",
     deliveryPendingNote: "Delivery is not included in this total yet — it is priced by distance to your address and confirmed after you place the order.",
     yourItems: "Your items ({count})",
     summary: "Summary",
@@ -268,17 +266,16 @@ export const en = {
   },
 
   payment: {
+    accountName: "Account name",
+    amountToSend: "Amount to send",
+    oneNumberHint: "Send the amount below to this Lipa Namba, then keep the confirmation SMS as your receipt.",
+    coversAllSellers: "This one payment covers everything in your order, including items from all {count} sellers. You do not pay each seller separately.",
+    unavailableRightNow: "Payments are being updated and orders cannot be taken for a few minutes. Your basket is saved.",
     copy: "Copy",
     copied: "Copied",
-    payDirectly: "Pay directly to the seller",
-    partialBlocked: "Items from {vendor} are not included in this order.",
+    payDirectly: "Pay directly to {brand}",
     lipaNamba: "Lipa Namba",
     lipaNambaHint: "Pay each seller directly on their own Lipa Namba.",
-    instructions: "Send each seller the amount shown below on their Lipa Namba, then keep the confirmation SMS as your receipt.",
-    payTo: "Pay to",
-    notSetUp: "This seller has not set up their Lipa Namba yet.",
-    notSetUpHint: "We cannot take payment for their items until they do. Remove them from your basket, or message the seller.",
-    amountDue: "Amount due",
     mobileMoney: "Mobile money",
     mobileMoneyHint: "Pay now with M-Pesa, Tigo Pesa, Airtel Money or Halopesa.",
     comingSoon: "Coming soon",
@@ -291,6 +288,7 @@ export const en = {
   },
 
   orders: {
+    awaitingPayment: "Awaiting payment — send the amount above to complete this order.",
     signInTitle: "Sign in to see your orders",
     signInHint: "Your order history is tied to your account.",
     emptyHintLong: "When you place an order it will appear here with its delivery status.",

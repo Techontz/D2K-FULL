@@ -21,10 +21,15 @@ class Order extends Model
         'status',
         'payment_provider',
         'payment_method',
-        // The vendor's till number as it stood when this order was placed.
-        // Snapshotted, never read back off the vendor: a seller changing
-        // their number must not rewrite what past customers were told to pay.
+        // Direct2Kariakoo's payment details as they stood when this order was
+        // placed. Snapshotted, never read back off the current settings: an
+        // administrator changing the till must not rewrite what past customers
+        // were told to pay.
         'lipa_namba',
+        'payment_account_name',
+        // Placing an order is not paying for it. Stays pending_payment until
+        // someone at D2K confirms the money actually arrived.
+        'payment_status',
         'delivery_address',
         'customer_phone',
         'external_id',

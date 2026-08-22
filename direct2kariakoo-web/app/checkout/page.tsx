@@ -175,21 +175,15 @@ function CheckoutContent() {
   }, [cartKey, cart.ready, coords?.latitude, coords?.longitude, isAuthenticated]);
 
   const groups = preview?.vendor_groups ?? [];
-  const blocked = groups.filter((group) => !group.can_accept_orders);
-
-  // At least one seller can be paid. A basket also holding an unconfigured
-  // store still checks out — that store's items simply stay behind.
-  const canPlaceOrder = preview?.can_place_order === true;
   const deliveryFee = preview?.delivery.status === "quoted" ? preview.delivery.amount : null;
 
-  // Exactly the products this order will cover, decided by the server.
-  const payableIds = preview?.payable_product_ids ?? [];
+  // One recipient for the whole basket. Nothing about a seller can block a
+  // sale — the only thing that can is the marketplace having no till set.
+  const recipient = preview?.payment ?? null;
+  const canPlaceOrder = preview?.can_place_order === true;
 
-  // The figures describe what is actually being ordered, not the whole basket.
-  // Showing the full subtotal above a part-order would overstate what the
-  // shopper is about to commit to.
-  const orderSubtotal = preview?.payable_subtotal ?? cart.subtotal;
-  const total = preview?.payable_total ?? cart.subtotal;
+  const orderSubtotal = preview?.subtotal ?? cart.subtotal;
+  const total = preview?.total ?? cart.subtotal;
 
   if (cart.ready && cart.lines.length === 0) {
     return (
@@ -218,18 +212,12 @@ function CheckoutContent() {
     // the shopper is filling the form in.
     if (!(await requireAuth())) return;
 
-    // Only what the server said can be paid for. Items from a seller with no
-    // till stay in the basket rather than being ordered with nowhere to send
-    // the money, or silently thrown away.
-    const ordering = new Set(payableIds);
-    const items = cart.lines
-      .filter((line) => ordering.has(line.product.id))
-      .map((line) => ({ product_id: line.product.id, quantity: line.quantity }));
-
-    if (items.length === 0) {
-      setError(t("checkout.nothingPayable"));
-      return;
-    }
+    // The whole basket, in one order, paid for in one payment. There is no
+    // per-seller split any more: every item goes on the same order.
+    const items = cart.lines.map((line) => ({
+      product_id: line.product.id,
+      quantity: line.quantity,
+    }));
 
     setPlacing(true);
     setError(null);
@@ -244,9 +232,7 @@ function CheckoutContent() {
         delivery_longitude: coords?.longitude ?? null,
       });
 
-      // Remove only what was ordered. cart.clear() would take the unpayable
-      // items with it, and the shopper would lose them without being told.
-      items.forEach((item) => cart.remove(item.product_id));
+      cart.clear();
 
       router.push(`/account/orders?placed=${encodeURIComponent(result.reference)}`);
     } catch (err) {
@@ -370,7 +356,7 @@ function CheckoutContent() {
               <PaymentOption
                 checked
                 title={t("payment.lipaNamba")}
-                body={t("payment.payDirectly")}
+                body={t("payment.payDirectly", { brand: BRAND.name })}
               />
 
               {/* Shown so shoppers know it is coming, but not selectable —
@@ -403,69 +389,74 @@ function CheckoutContent() {
 
           {/* ---- who to pay ----
 
-              A D2K basket routinely spans several stores and each one has its
-              own till, so this is a list rather than a single number. Merging
-              them would be wrong in the most expensive way available: the
-              shopper pays one seller for everybody's goods and the rest are
-              never paid at all. Every number here comes from the server, for
-              the seller it is printed under. */}
-          {groups.length > 0 ? (
-            <section className="rounded-[var(--radius-md)] bg-[color:var(--color-surface)] p-4">
-              <h2 className="mb-1 text-[15px] font-extrabold">{t("checkout.paymentInstructions")}</h2>
-              <p className="mb-3 text-[12px] leading-relaxed text-[color:var(--color-ink-muted)]">
-                {t("payment.instructions")}
-              </p>
+              One number, for the whole basket, however many shops it came
+              from. This used to print a till per seller, which meant a
+              three-shop basket asked the customer to make three separate
+              transfers — something no customer does, and which leaves an order
+              paid in pieces to people D2K has no record of receiving from.
 
-              <ul className="space-y-2">
+              The number is the single thing on this page that has to get into
+              a phone's dialler correctly, so it is the largest element here
+              and it can be copied rather than transcribed. */}
+          {recipient?.lipa_namba ? (
+            <section className="overflow-hidden rounded-[var(--radius-md)] bg-[color:var(--color-surface)]">
+              <div className="border-b border-[color:var(--color-line)] p-4 pb-3">
+                <h2 className="text-[15px] font-extrabold">{t("checkout.paymentInstructions")}</h2>
+                <p className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                  {t("payment.oneNumberHint")}
+                </p>
+              </div>
+
+              <div className="bg-[color:var(--color-action-soft)] p-4">
+                <span className="block text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
+                  {t("payment.lipaNamba")}
+                </span>
+
+                {/* break-all with min-w-0 so a twelve-digit till wraps inside a
+                    320px column instead of pushing the page sideways. */}
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <span className="min-w-0 flex-1 break-all font-mono text-[30px] font-black leading-none tracking-wide sm:text-[34px]">
+                    {recipient.lipa_namba_display ?? recipient.lipa_namba}
+                  </span>
+                  <CopyButton value={recipient.lipa_namba} />
+                </div>
+
+                <dl className="mt-4 space-y-2 text-[13px]">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <dt className="text-[color:var(--color-ink-muted)]">{t("payment.accountName")}</dt>
+                    <dd className="min-w-0 break-words text-right font-extrabold">{recipient.account_name}</dd>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-[color:var(--color-line)] pt-2">
+                    <dt className="text-[color:var(--color-ink-muted)]">{t("payment.amountToSend")}</dt>
+                    <dd className="shrink-0 text-[17px] font-black">{formatMoney(recipient.amount)}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* The basket spans several shops, so say plainly that it is
+                  still one payment — otherwise a customer seeing three sellers
+                  below reasonably expects three transfers. */}
+              {groups.length > 1 ? (
+                <p className="border-t border-[color:var(--color-line)] px-4 py-3 text-[12px] leading-relaxed text-[color:var(--color-ink-muted)]">
+                  {t("payment.coversAllSellers", { count: groups.length })}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          {/* Which shop each item comes from. Informational: sellers are paid
+              by D2K afterwards, and none of this carries a payment detail. */}
+          {groups.length > 1 ? (
+            <section className="rounded-[var(--radius-md)] bg-[color:var(--color-surface)] p-4">
+              <h2 className="mb-3 text-[15px] font-extrabold">{t("checkout.sellersInOrder")}</h2>
+              <ul className="divide-y divide-[color:var(--color-line)]">
                 {groups.map((group) => (
                   <li
                     key={group.vendor_id ?? group.vendor_name}
-                    className={`rounded-[var(--radius-sm)] border p-3 ${
-                      group.can_accept_orders
-                        ? "border-[color:var(--color-line-strong)]"
-                        : "border-[color:var(--color-sale)] bg-red-50"
-                    }`}
+                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5"
                   >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                      <span className="min-w-0 text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
-                        {t("payment.payTo")}
-                      </span>
-                      <span className="text-[13px] font-bold">{formatMoney(group.subtotal)}</span>
-                    </div>
-
-                    <p className="clamp-2 text-[14px] font-extrabold">{group.vendor_name}</p>
-
-                    {group.can_accept_orders && group.lipa_namba ? (
-                      <div className="mt-2">
-                        <span className="block text-[11px] font-bold uppercase tracking-wide text-[color:var(--color-ink-muted)]">
-                          {t("payment.lipaNamba")}
-                        </span>
-
-                        {/* The number is the single thing on this page the
-                            shopper has to get into their phone's dialler
-                            correctly, so it is the largest thing on the card
-                            and it can be copied rather than transcribed.
-
-                            break-all, not nowrap: a twelve-digit till has to
-                            wrap inside a 320px column rather than push the
-                            page sideways. min-w-0 lets it. */}
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="min-w-0 flex-1 break-all font-mono text-[22px] font-black leading-tight tracking-wide">
-                            {group.lipa_namba_display ?? group.lipa_namba}
-                          </span>
-                          <CopyButton value={group.lipa_namba} />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
-                        <p className="text-[12px] font-bold text-[color:var(--color-sale)]">
-                          {t("payment.notSetUp")}
-                        </p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]">
-                          {t("payment.notSetUpHint")}
-                        </p>
-                      </div>
-                    )}
+                    <span className="min-w-0 flex-1 text-[13px] font-bold">{group.vendor_name}</span>
+                    <span className="shrink-0 text-[13px] font-semibold">{formatMoney(group.subtotal)}</span>
                   </li>
                 ))}
               </ul>
@@ -540,34 +531,20 @@ function CheckoutContent() {
                 role="alert"
                 className="mt-3 rounded-[var(--radius-sm)] bg-red-50 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--color-sale)]"
               >
-                {previewFailed === "outdated"
-                  ? t("checkout.paymentSetupUpdating")
-                  : t("checkout.pricingUnavailable")}
+                {t("checkout.pricingUnavailable")}
               </p>
             ) : null}
 
-            {/* A notice, not a blocker. These items are staying in the
-                basket; everything else is still ordered. */}
-            {blocked.length > 0 ? (
-              <div
-                role="status"
-                className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--color-warn)] bg-[color:var(--color-warn-soft)] px-3 py-2"
+            {/* The one thing that can still stop a sale: the marketplace
+                itself has no till configured. That is an operations problem,
+                not something the shopper did, so it does not blame them. */}
+            {preview?.payment_unavailable ? (
+              <p
+                role="alert"
+                className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--color-warn)] bg-[color:var(--color-warn-soft)] px-3 py-2 text-[12px] leading-relaxed text-[color:var(--color-ink)]"
               >
-                <p className="text-[12px] font-extrabold text-[color:var(--color-warn)]">
-                  {t("checkout.blockedTitle")}
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {blocked.map((group) => (
-                    <li
-                      key={group.vendor_id ?? group.vendor_name}
-                      className="text-[11px] leading-relaxed text-[color:var(--color-ink-muted)]"
-                    >
-                      {t("payment.partialBlocked", { vendor: group.vendor_name })}{" "}
-                      {t("payment.notSetUpHint")}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                {t("payment.unavailableRightNow")}
+              </p>
             ) : null}
 
             {error ? (

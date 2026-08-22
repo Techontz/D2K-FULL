@@ -38,8 +38,12 @@ class StorefrontTest extends TestCase
         $this->vendor = Vendor::create([
             'user_id' => $owner->id, 'business_name' => 'Kariakoo Test Store',
             'phone' => '0700000001', 'is_approved' => true,
-            // Checkout will not take an order for a store with no till number.
-            'lipa_namba' => '123456',
+        ]);
+
+        // The marketplace's own till. Checkout will not take an order without
+        // one, because there would be nowhere for the money to go.
+        \App\Models\PaymentSetting::create([
+            'lipa_namba' => '552354', 'account_name' => 'Direct2Kariakoo', 'is_active' => true,
         ]);
 
         $this->category = Category::create(['name' => 'Electronics']);
