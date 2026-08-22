@@ -57,6 +57,37 @@ function Carousel({ slides }: { slides: HeroBannerModel[] }) {
   // The rendered <img> for each slide, read directly when the timer fires.
   const artwork = useRef<(HTMLImageElement | null)[]>([]);
 
+  // Slides after the first are held back until the page has finished loading.
+  //
+  // They cannot use native lazy loading — a translate-based carousel keeps them
+  // inside the viewport as far as the browser is concerned, so `loading="lazy"`
+  // never fires and a banner that is never fetched is a panel that is never
+  // shown. But fetching them all up front means the first paint competes with
+  // whatever the admin uploaded, and one live banner is a 3.2MB PNG that
+  // Vercel's optimiser refuses and passes through untouched.
+  //
+  // Waiting for `load` costs nothing visible: the first slide is the only one
+  // on screen for the first six seconds anyway.
+  const [loadRest, setLoadRest] = useState(false);
+
+  useEffect(() => {
+    if (document.readyState === "complete") {
+      setLoadRest(true);
+      return;
+    }
+
+    const onLoad = () => setLoadRest(true);
+    window.addEventListener("load", onLoad, { once: true });
+
+    // A stalled sub-resource must not strand the carousel on one slide.
+    const fallback = window.setTimeout(() => setLoadRest(true), 4000);
+
+    return () => {
+      window.removeEventListener("load", onLoad);
+      window.clearTimeout(fallback);
+    };
+  }, []);
+
   const count = slides.length;
   const go = useCallback((next: number) => setIndex((next + count) % count), [count]);
 
@@ -119,6 +150,11 @@ function Carousel({ slides }: { slides: HeroBannerModel[] }) {
             banner={slide}
             active={position === index}
             eager={position === 0}
+            // The first slide always renders; the rest join once the page has
+            // loaded. The rotation timer only advances onto artwork that has
+            // actually arrived, so a slide that is not there yet is simply
+            // skipped until it is.
+            load={position === 0 || loadRest}
             imageRef={(node) => {
               artwork.current[position] = node;
             }}
@@ -157,20 +193,26 @@ function Slide({
   banner,
   active,
   eager,
+  load,
   imageRef,
 }: {
   banner: HeroBannerModel;
   active: boolean;
   eager: boolean;
+  load: boolean;
   imageRef(node: HTMLImageElement | null): void;
 }) {
-  const image = (
+  const image = load ? (
     <BannerArtwork
       banner={banner}
       eager={eager}
       className="aspect-[3/1] w-full object-cover"
       imageRef={imageRef}
     />
+  ) : (
+    // Holds the slot at the same ratio so nothing moves when the artwork
+    // arrives.
+    <div className="aspect-[3/1] w-full bg-[color:var(--color-surface-alt)]" />
   );
 
   return (
