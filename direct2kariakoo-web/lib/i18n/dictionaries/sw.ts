@@ -266,7 +266,7 @@ export const sw: Dictionary = {
   },
 
   payment: {
-    accountName: "Jina la akaunti",
+    accountName: "Jina",
     amountToSend: "Kiasi cha kutuma",
     oneNumberHint: "Tuma kiasi kilicho hapa chini kwenye Lipa Namba hii, kisha hifadhi ujumbe wa uthibitisho kama risiti yako.",
     coversAllSellers: "Malipo haya moja yanahusu kila kitu kwenye oda yako, ikiwemo bidhaa za wauzaji wote {count}. Hulipi kila muuzaji kivyake.",

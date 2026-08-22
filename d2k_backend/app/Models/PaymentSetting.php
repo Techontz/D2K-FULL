@@ -76,6 +76,12 @@ class PaymentSetting extends Model
         $number = $this->payableNumber();
 
         return [
+            // `number` and `name` are the short names the checkout API
+            // contract uses; the longer keys are what the storefront already
+            // reads. Both describe the same single recipient.
+            'number'             => $number,
+            'name'               => $this->payeeName(),
+
             'lipa_namba'         => $number,
             'lipa_namba_display' => LipaNamba::pretty($number),
             'account_name'       => $this->payeeName(),

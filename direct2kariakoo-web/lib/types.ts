@@ -241,6 +241,9 @@ export interface OrderItem {
  * marketplace till later does not rewrite what a past customer was told.
  */
 export interface OrderPayment {
+  method: string;
+  number: string | null;
+  name: string | null;
   /** Null on orders placed before central payment existed. */
   lipa_namba: string | null;
   lipa_namba_display: string | null;
@@ -263,8 +266,8 @@ export interface Order {
   placed_at: string | null;
   item_count: number;
   subtotal: number;
-  /** Null while delivery is still to be priced — not the same as free. */
-  delivery_fee: number | null;
+  /** Always numeric: nothing is added to the total by checkout. */
+  delivery_fee: number;
   delivery_status: "pending" | "quoted";
   total: number;
   currency: string;
@@ -296,6 +299,8 @@ export interface CheckoutVendorGroup {
 export interface CheckoutPreview {
   currency: string;
   subtotal: number;
+  /** Plain figure; 0 when no fee has been worked out. */
+  delivery_fee: number;
   delivery: {
     status: "pending" | "quoted";
     amount: number | null;
@@ -309,6 +314,10 @@ export interface CheckoutPreview {
    * payment covers the basket however many shops it came from.
    */
   payment: {
+    method: string;
+    /** Bare digits. `lipa_namba` is the same value under the storefront's name. */
+    number: string | null;
+    name: string;
     lipa_namba: string | null;
     lipa_namba_display: string | null;
     account_name: string;

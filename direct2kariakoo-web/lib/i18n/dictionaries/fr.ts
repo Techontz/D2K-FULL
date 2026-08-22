@@ -259,7 +259,7 @@ export const fr: Dictionary = {
   },
 
   payment: {
-    accountName: "Nom du compte",
+    accountName: "Nom",
     amountToSend: "Montant à envoyer",
     oneNumberHint: "Envoyez le montant ci-dessous à ce Lipa Namba, puis conservez le SMS de confirmation comme reçu.",
     coversAllSellers: "Ce paiement unique couvre toute votre commande, y compris les articles des {count} vendeurs. Vous ne payez pas chaque vendeur séparément.",

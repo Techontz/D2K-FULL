@@ -266,7 +266,7 @@ export const en = {
   },
 
   payment: {
-    accountName: "Account name",
+    accountName: "Name",
     amountToSend: "Amount to send",
     oneNumberHint: "Send the amount below to this Lipa Namba, then keep the confirmation SMS as your receipt.",
     coversAllSellers: "This one payment covers everything in your order, including items from all {count} sellers. You do not pay each seller separately.",

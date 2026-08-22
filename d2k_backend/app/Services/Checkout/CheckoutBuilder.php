@@ -89,11 +89,21 @@ class CheckoutBuilder
             $groups,
         ));
 
-        $total = round($subtotal + (float) ($delivery->amount ?? 0), 2);
+        // Nothing is added to the goods total by this checkout. The flat
+        // TZS 3,000 is gone and no distance figure is invented here; where a
+        // rate card is configured the quoter supplies one, and otherwise the
+        // fee is zero and settled at delivery.
+        $deliveryFee = (float) ($delivery->amount ?? 0);
+        $total = round($subtotal + $deliveryFee, 2);
 
         return [
             'currency' => 'TZS',
             'subtotal' => round($subtotal, 2),
+
+            // Plain number, for callers that just want the figure.
+            'delivery_fee' => round($deliveryFee, 2),
+
+            // The fuller picture: whether it has been quoted, and from how far.
             'delivery' => $delivery->toArray(),
 
             // Goods plus whatever delivery has been settled at. While delivery
@@ -103,7 +113,10 @@ class CheckoutBuilder
 
             // One recipient for the whole basket, however many sellers are in
             // it. This is the amount the customer sends, in one payment.
-            'payment'  => $recipient->toRecipientArray() + ['amount' => $total],
+            'payment'  => $recipient->toRecipientArray() + [
+                'method' => 'lipa_namba',
+                'amount' => $total,
+            ],
 
             // Kept so the customer can see which shop each item comes from and
             // what each is owed. It is presentation, not payment routing.

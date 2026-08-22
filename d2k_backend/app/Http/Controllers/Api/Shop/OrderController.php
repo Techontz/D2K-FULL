@@ -282,7 +282,11 @@ class OrderController extends Controller
             'placed_at'        => optional($first->created_at)->toIso8601String(),
             'item_count'       => (int) $lines->sum('quantity'),
             'subtotal'         => round($subtotal, 2),
-            'delivery_fee'     => $delivery,
+            // Numeric always: nothing is added to the total by this
+            // checkout, so an unquoted delivery reports 0 rather than null.
+            // `delivery_status` still distinguishes "not priced yet" for the
+            // storefront's wording.
+            'delivery_fee'     => $delivery ?? 0,
             'delivery_status'  => $delivery === null ? 'pending' : 'quoted',
             'total'            => round($subtotal + (float) ($delivery ?? 0), 2),
             'currency'         => 'TZS',
@@ -329,9 +333,14 @@ class OrderController extends Controller
         $name   = Schema::hasColumn('orders', 'payment_account_name') ? $first->payment_account_name : null;
 
         return [
+            'method'             => 'lipa_namba',
+            'number'             => $number,
+            'name'               => $name,
+
             'lipa_namba'         => $number,
             'lipa_namba_display' => LipaNamba::pretty($number),
             'account_name'       => $name,
+
             // One payment covers the whole order, however many sellers it spans.
             'amount'             => $amount,
         ];

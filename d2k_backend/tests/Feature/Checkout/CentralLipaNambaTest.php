@@ -259,6 +259,104 @@ class CentralLipaNambaTest extends TestCase
             ->assertJsonPath('payment.account_name', 'D2K');
     }
 
+    /* ---------------- the response contract ---------------- */
+
+    public function test_the_checkout_response_carries_the_shape_the_api_promises(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $this->preview([$this->productA, $this->productB, $this->productC])
+            ->assertOk()
+            ->assertJsonPath('payment.method', 'lipa_namba')
+            ->assertJsonPath('payment.number', '552354')
+            ->assertJsonPath('payment.name', 'Direct2Kariakoo')
+            ->assertJsonPath('subtotal', 65000)
+            ->assertJsonPath('delivery_fee', 0)
+            ->assertJsonPath('total', 65000);
+    }
+
+    public function test_no_vendor_payment_details_appear_anywhere_in_the_response(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $body = $this->preview([$this->productA, $this->productB])->assertOk()->getContent();
+
+        // The whole point: not one shop's number reaches the customer.
+        $this->assertStringNotContainsString('payment_options', $body);
+        $this->assertStringNotContainsString('vendor_lipa', $body);
+
+        foreach ($this->preview([$this->productA, $this->productB])->json('vendor_groups') as $group) {
+            $this->assertArrayNotHasKey('lipa_namba', $group);
+            $this->assertArrayNotHasKey('payment_options', $group);
+        }
+    }
+
+    public function test_the_legacy_vendor_preview_no_longer_returns_payment_options(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $response = $this->postJson('/api/checkout/vendors', [
+            'items' => [
+                ['product_id' => $this->productA->id, 'quantity' => 1],
+                ['product_id' => $this->productB->id, 'quantity' => 1],
+            ],
+        ])->assertOk();
+
+        foreach ($response->json('vendors') as $entry) {
+            $this->assertArrayNotHasKey('payment_options', $entry['vendor']);
+            // Vendor grouping stays: it is how each shop is fulfilled.
+            $this->assertArrayHasKey('id', $entry['vendor']);
+        }
+    }
+
+    public function test_the_order_response_carries_the_same_shape(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $reference = $this->placeOrder([$this->productA, $this->productB])->assertCreated()->json('reference');
+
+        $this->getJson("/api/shop/orders/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('order.reference', $reference)
+            ->assertJsonPath('order.payment.method', 'lipa_namba')
+            ->assertJsonPath('order.payment.number', '552354')
+            ->assertJsonPath('order.payment.name', 'Direct2Kariakoo')
+            ->assertJsonPath('order.delivery_fee', 0)
+            ->assertJsonPath('order.subtotal', 50000)
+            ->assertJsonPath('order.total', 50000);
+    }
+
+    /* ---------------- stock ---------------- */
+
+    public function test_stock_falls_exactly_once_per_item(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $before = [
+            $this->productA->stock,
+            $this->productB->stock,
+            $this->productC->stock,
+        ];
+
+        $this->placeOrder([$this->productA, $this->productB, $this->productC])->assertCreated();
+
+        $this->assertSame($before[0] - 1, $this->productA->fresh()->stock);
+        $this->assertSame($before[1] - 1, $this->productB->fresh()->stock);
+        $this->assertSame($before[2] - 1, $this->productC->fresh()->stock);
+    }
+
+    public function test_every_line_of_a_multi_vendor_order_shares_one_reference(): void
+    {
+        Sanctum::actingAs($this->shopper);
+
+        $reference = $this->placeOrder([$this->productA, $this->productB, $this->productC])
+            ->assertCreated()->json('reference');
+
+        $this->assertMatchesRegularExpression('/^D2K-[A-Z0-9]{8}$/', $reference);
+        $this->assertSame(3, Order::where('reference', $reference)->count());
+        $this->assertSame(1, Order::query()->distinct()->count('reference'));
+    }
+
     /* ---------------- pay on delivery, and the flat fee ---------------- */
 
     public function test_pay_on_delivery_is_refused(): void

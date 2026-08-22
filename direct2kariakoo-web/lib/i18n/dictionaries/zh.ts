@@ -258,7 +258,7 @@ export const zh: Dictionary = {
   },
 
   payment: {
-    accountName: "账户名称",
+    accountName: "名称",
     amountToSend: "应付金额",
     oneNumberHint: "请按下方金额向该 Lipa Namba 付款，并保留确认短信作为凭证。",
     coversAllSellers: "这一笔付款涵盖订单中的全部商品，包括来自 {count} 位卖家的商品。您无需分别向各卖家付款。",

@@ -127,13 +127,22 @@ class PaymentController extends Controller
         if ($status === 'success') {
             foreach ($orders as $order) {
                 $order->update(['status' => 'paid']);
-                $order->product->decrement('stock', $order->quantity);
+
+                // Stock is NOT decremented here. checkout() already reserved it
+                // when the order was created, so doing it again on the callback
+                // sold every AzamPay order out of the catalogue twice over.
 
                 $wallet = Wallet::firstOrCreate(['vendor_id' => $order->vendor_id]);
                 $wallet->increment('balance', $order->total);
             }
         } else {
             foreach ($orders as $order) {
+                // Release the reservation checkout() made. This was never
+                // happening, so a failed payment quietly kept stock off sale.
+                if ($order->status !== 'failed' && $order->product) {
+                    $order->product->increment('stock', $order->quantity);
+                }
+
                 $order->update(['status' => 'failed']);
             }
         }
@@ -341,22 +350,15 @@ class PaymentController extends Controller
 
                 $total = collect($items)->sum(fn($i) => $i['price'] * $i['quantity']);
 
-                $vendor->load(['paymentOptions.paymentMethod:id,name']);
-                $paymentOptions = $vendor->paymentOptions->map(function ($opt) {
-                    return [
-                        'id' => $opt->id,
-                        'method' => $opt->paymentMethod->name ?? 'N/A',
-                        'account' => $opt->account,
-                    ];
-                });
-
                 $vendors[] = [
+                    // Identity and totals only. A vendor's own payment details
+                    // are deliberately neither loaded nor returned: the customer
+                    // pays Direct2Kariakoo's single Lipa Namba for the whole
+                    // basket, and handing back a number per shop is what turned
+                    // a three-vendor order into three separate transfers.
                     'vendor' => [
                         'id' => $vendor->id,
                         'name' => $vendor->business_name ?? $vendor->user->name ?? 'Unnamed Vendor',
-
-
-                        'payment_options' => $paymentOptions,
                     ],
                     'items' => $items,
                     'total' => $total,
