@@ -1,5 +1,8 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/SmartImage";
+import { optimizedSrcSet } from "@/lib/image";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
@@ -217,20 +220,38 @@ function BannerArtwork({
 }) {
   const media = cropUntil === "lg" ? "(max-width: 1023px)" : "(max-width: 640px)";
 
+  // The phone crop when an administrator uploaded one, the wide artwork
+  // otherwise. `mobile_image` falls back to `image` server-side, so for most
+  // banners these are the same file.
+  const phoneArt = banner.mobile_image && banner.mobile_image !== banner.image
+    ? banner.mobile_image
+    : banner.image;
+
   return (
     <picture>
-      {/* A dedicated phone crop is honoured when the administrator uploaded
-          one. `mobile_image` falls back to the wide artwork server-side, so the
-          two are equal for most banners and no source is emitted. */}
-      {banner.mobile_image && banner.mobile_image !== banner.image ? (
-        <source media={media} srcSet={banner.mobile_image} />
+      {phoneArt !== banner.image ? (
+        <source
+          media={media}
+          srcSet={optimizedSrcSet(phoneArt, [828], 65)}
+          sizes="100vw"
+        />
       ) : null}
-      <img
-        src={banner.image ?? ""}
+
+      {/* These are the heaviest images on the site — the two live banners are
+          5.6MB and 3.2MB PNGs. Resized and re-encoded they are a rounding
+          error, and the strip is the first thing a visitor sees. */}
+      <SmartImage
+        src={banner.image}
         alt={banner.alt ?? banner.title ?? ""}
-        loading="eager"
-        fetchPriority={eager ? "high" : "low"}
-        decoding="async"
+        // Two widths, not four. Each distinct width is a separate fetch of
+        // the original from the origin, and the live banners are 3-5MB PNGs
+        // that the origin needs ~10s to serve — longer than the optimiser
+        // waits. Fewer widths means fewer chances to hit that timeout, and
+        // the fallback in SmartImage covers the ones that do.
+        widths={[828, 1200]}
+        sizes="(max-width: 1023px) 100vw, 66vw"
+        quality={65}
+        eager={eager}
         ref={imageRef}
         className={className}
       />

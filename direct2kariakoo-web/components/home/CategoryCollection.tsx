@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/SmartImage";
+
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import type { CategoryCollection as CollectionModel } from "@/lib/types";
@@ -46,11 +48,11 @@ export function CategoryCollection({ collection }: { collection: CollectionModel
           >
             <span className="block overflow-hidden rounded-[var(--radius-md)] bg-white ring-1 ring-[color:var(--color-line)]">
               {tile.image ? (
-                <img
+                <SmartImage
                   src={tile.image}
                   alt=""
-                  loading="lazy"
-                  decoding="async"
+                  widths={[128, 200, 256]}
+                  sizes="124px"
                   className="aspect-square w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
                 />
               ) : (

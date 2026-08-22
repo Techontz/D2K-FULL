@@ -1,5 +1,8 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/SmartImage";
+import { optimizedSrcSet } from "@/lib/image";
+
 import Link from "next/link";
 import type { HeroBanner as BannerModel } from "@/lib/types";
 
@@ -16,13 +19,18 @@ export function PromoBanner({ banner }: { banner: BannerModel | undefined }) {
   const image = (
     <picture>
       {banner.mobile_image && banner.mobile_image !== banner.image ? (
-        <source media="(max-width: 640px)" srcSet={banner.mobile_image} />
+        <source
+          media="(max-width: 640px)"
+          srcSet={optimizedSrcSet(banner.mobile_image, [640, 828], 65)}
+          sizes="100vw"
+        />
       ) : null}
-      <img
+      <SmartImage
         src={banner.image}
         alt={banner.alt ?? banner.title ?? ""}
-        loading="lazy"
-        decoding="async"
+        widths={[640, 1080, 1200]}
+        sizes="(max-width: 1024px) 100vw, 1100px"
+        quality={65}
         className="w-full object-cover"
       />
     </picture>

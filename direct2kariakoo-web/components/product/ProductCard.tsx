@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/SmartImage";
+
 import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/lib/store/cart";
@@ -58,13 +60,14 @@ export function ProductCard({
         {/* ---- image plate ---- */}
         <div className="relative aspect-square w-full overflow-hidden bg-white">
           {product.image ? (
-            // Plain <img>: images are unoptimized in this static export anyway,
-            // and native lazy loading keeps long grids cheap.
-            <img
+            // A card is at most ~320px wide even on desktop, and about 45vw
+            // on a phone. Asking for the original meant a 150px tile pulling
+            // down whatever the seller photographed with.
+            <SmartImage
               src={product.image}
               alt={product.name}
-              loading="lazy"
-              decoding="async"
+              widths={[200, 320, 420]}
+              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 220px"
               className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.04]"
             />
           ) : (

@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/SmartImage";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BRAND } from "@/lib/brand";
@@ -32,7 +34,7 @@ export function CategoryRail({ categories }: { categories: Omit<Category, "subca
           >
             <span className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-[color:var(--color-surface-alt)] ring-1 ring-[color:var(--color-line)] transition-transform group-hover:scale-105">
               {category.image ? (
-                <img src={category.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                <SmartImage src={category.image} alt="" widths={[96, 128, 200]} sizes="(max-width: 640px) 22vw, 120px" className="h-full w-full object-cover" />
               ) : (
                 <span className="text-2xl">{category.icon ?? "🛍️"}</span>
               )}
@@ -92,10 +94,11 @@ function ReasonsToShop({ categories }: { categories: Omit<Category, "subcategori
           >
             <div className="mb-6 flex h-16 items-center justify-center">
               {categories[index]?.image ? (
-                <img
-                  src={categories[index].image ?? ""}
+                <SmartImage
+                  src={categories[index].image}
                   alt=""
-                  loading="lazy"
+                  widths={[64, 128]}
+                  sizes="64px"
                   className="h-16 w-16 rounded-[var(--radius-sm)] object-cover transition-transform group-hover:scale-105"
                 />
               ) : (
@@ -148,7 +151,8 @@ function MegaDeals({ deals }: { deals: ProductCardModel[] }) {
 
             <div className="mb-2 aspect-square w-full overflow-hidden">
               {product.image ? (
-                <img src={product.image} alt={product.name} loading="lazy"
+                <SmartImage src={product.image} alt={product.name}
+                  widths={[128, 200, 256]} sizes="(max-width: 640px) 30vw, 160px"
                   className="h-full w-full object-contain transition-transform group-hover:scale-105" />
               ) : (
                 <div className="h-full w-full bg-[color:var(--color-surface-alt)]" />
@@ -225,7 +229,7 @@ function InFocus({ categories }: { categories: Omit<Category, "subcategories">[]
           className="group relative flex min-h-[150px] flex-col justify-end overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[#111827] to-[#374151] p-4 text-white"
         >
           {spotlight[0]?.image ? (
-            <img src={spotlight[0].image ?? ""} alt="" loading="lazy"
+            <SmartImage src={spotlight[0].image} alt="" widths={[420, 640]} sizes="(max-width: 1024px) 100vw, 50vw"
               className="absolute inset-0 h-full w-full object-cover opacity-35 transition-transform duration-500 group-hover:scale-105" />
           ) : null}
           <div className="relative">
@@ -243,7 +247,7 @@ function InFocus({ categories }: { categories: Omit<Category, "subcategories">[]
           className="group relative flex min-h-[150px] flex-col justify-end overflow-hidden rounded-[var(--radius-md)] bg-[color:var(--color-brand)] p-4"
         >
           {spotlight[1]?.image ? (
-            <img src={spotlight[1].image ?? ""} alt="" loading="lazy"
+            <SmartImage src={spotlight[1].image} alt="" widths={[420, 640]} sizes="(max-width: 1024px) 100vw, 50vw"
               className="absolute inset-0 h-full w-full object-cover opacity-25 transition-transform duration-500 group-hover:scale-105" />
           ) : null}
           <div className="relative">

@@ -51,6 +51,13 @@ function toParams(query: ProductQuery): Record<string, string> {
   return params;
 }
 
+/**
+ * Shared across every component that asks for the category nav during one page
+ * session. Cleared on a full page load, which is the only time the list could
+ * matter enough to re-read.
+ */
+let categoryCache: Promise<Category[]> | null = null;
+
 export const shop = {
   async home(): Promise<HomeFeed> {
     const { data } = await api.get<HomeFeed>("/shop/home");
@@ -62,9 +69,34 @@ export const shop = {
     return data.vendors;
   },
 
+  /**
+   * The category nav, fetched at most once per page session.
+   *
+   * Every page mounts SiteChrome, so this used to be a fresh request on every
+   * navigation — and against the live API that is ~6 seconds each time, for a
+   * list that changes when an administrator edits it and not otherwise.
+   *
+   * The in-flight promise is shared too, so the handful of components that ask
+   * during the same paint make one request between them rather than four.
+   *
+   * Deliberately memory-only and deliberately not applied to anything else:
+   * stock, carts, orders and payment details must never be served from a
+   * stale copy, and none of them come through here.
+   */
   async categories(): Promise<Category[]> {
-    const { data } = await api.get<{ categories: Category[] }>("/shop/categories");
-    return data.categories;
+    if (categoryCache) return categoryCache;
+
+    categoryCache = api
+      .get<{ categories: Category[] }>("/shop/categories")
+      .then(({ data }) => data.categories)
+      .catch((error) => {
+        // A failure must not be cached, or the nav stays empty for the rest
+        // of the session over one dropped request.
+        categoryCache = null;
+        throw error;
+      });
+
+    return categoryCache;
   },
 
   async category(id: number) {
