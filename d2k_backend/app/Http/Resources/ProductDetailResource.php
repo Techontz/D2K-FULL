@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Support\Media;
 use App\Support\Phone;
 use App\Support\Money;
+use App\Support\ProductOptions;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -18,6 +19,7 @@ class ProductDetailResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $options = ProductOptions::forProduct($this->resource);
         $images  = Media::urls($this->images->pluck('image'));
         $reviews = $this->relationLoaded('reviews') ? $this->reviews : collect();
 
@@ -64,7 +66,17 @@ class ProductDetailResource extends JsonResource
 
             // Vendor-entered specs arrive from two places: the structured
             // attribute values and the free-form custom_fields JSON column.
-            'specifications' => $this->specifications(),
+            // Choices the customer must make before adding to cart, e.g.
+            // [{"id": 4, "name": "Size", "values": ["M", "L"]}]. These
+            // attributes are not repeated under specifications.
+            'options' => $options,
+
+            'specifications' => $this->specifications(array_column($options, 'id')),
+
+            // Raw attribute values keyed by attribute id, for the seller's
+            // edit form: a list for customer-choice attributes (exactly the
+            // option values), a string for everything else.
+            'attribute_values' => $this->attributeValuesForEdit($options),
 
             'rating' => [
                 'average'      => round((float) ($reviews->avg('rating') ?? 0), 1),
@@ -82,14 +94,17 @@ class ProductDetailResource extends JsonResource
         ];
     }
 
-    /** @return array<int, array{label: string, value: string}> */
-    private function specifications(): array
+    /**
+     * @param  array<int, int>  $optionAttributeIds  Shown as options instead.
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function specifications(array $optionAttributeIds = []): array
     {
         $specs = [];
 
         if ($this->relationLoaded('attributeValues')) {
             foreach ($this->attributeValues as $value) {
-                if ($value->attribute) {
+                if ($value->attribute && ! in_array((int) $value->attribute_id, $optionAttributeIds, true)) {
                     $specs[] = [
                         'label' => $value->attribute->name,
                         'value' => (string) $value->value,
@@ -105,6 +120,25 @@ class ProductDetailResource extends JsonResource
         }
 
         return $specs;
+    }
+
+    private function attributeValuesForEdit(array $options): object
+    {
+        $out = [];
+
+        foreach ($options as $option) {
+            $out[(string) $option['id']] = $option['values'];
+        }
+
+        foreach ($this->attributeValues as $value) {
+            $key = (string) $value->attribute_id;
+            if (! array_key_exists($key, $out)) {
+                $out[$key] = (string) $value->value;
+            }
+        }
+
+        // An object even when empty, so clients can index it by id.
+        return (object) $out;
     }
 
     /** Star breakdown (5 → 1) as percentages, for the reviews summary bars. */

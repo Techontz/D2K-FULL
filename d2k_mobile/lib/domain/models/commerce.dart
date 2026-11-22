@@ -6,15 +6,41 @@ class CartItem {
     required this.product,
     required this.quantity,
     this.variantLabel,
+    this.options = const {},
   });
 
   final Product product;
   final int quantity;
+
+  /// Legacy free-text variant from carts saved before product options
+  /// existed. Kept so those carts still load; new lines use [options].
   final String? variantLabel;
 
-  String get key => variantLabel == null
-      ? product.id
-      : '${product.id}::$variantLabel';
+  /// The shopper's choices, option name -> value (`{"Size": "M"}`).
+  final Map<String, String> options;
+
+  /// One line per product *and* choice: the same shirt in M and in L is two
+  /// lines, the same shirt in M twice is one line with quantity 2.
+  String get key => keyFor(product.id,
+      options: options, variantLabel: variantLabel);
+
+  static String keyFor(
+    String productId, {
+    Map<String, String> options = const {},
+    String? variantLabel,
+  }) {
+    if (options.isNotEmpty) {
+      final names = options.keys.toList()..sort();
+      return '$productId::${names.map((n) => '$n=${options[n]}').join('|')}';
+    }
+    return variantLabel == null ? productId : '$productId::$variantLabel';
+  }
+
+  /// "Size: M · Color: Red", or the legacy label, or null.
+  String? get optionsLabel {
+    if (options.isNotEmpty) return describeChosenOptions(options);
+    return variantLabel;
+  }
 
   Money get lineTotal => product.price * quantity;
 
@@ -26,7 +52,52 @@ class CartItem {
         product: product,
         quantity: quantity ?? this.quantity,
         variantLabel: variantLabel,
+        options: options,
       );
+}
+
+/// A university or college D2K delivers to, as configured by the admin.
+class Campus {
+  const Campus({
+    required this.id,
+    required this.name,
+    this.shortName,
+    this.area,
+    this.deliveryFee,
+  });
+
+  final String id;
+  final String name;
+  final String? shortName;
+  final String? area;
+
+  /// A flat campus delivery fee, or null for normal distance pricing.
+  final double? deliveryFee;
+
+  /// What the list and the chosen-campus field show.
+  String get displayName =>
+      (shortName != null && shortName!.trim().isNotEmpty) ? shortName! : name;
+
+  /// Matched by the picker's search field.
+  String get searchIndex =>
+      '$name ${shortName ?? ''} ${area ?? ''}'.toLowerCase();
+
+  factory Campus.fromJson(Map<String, dynamic> json) {
+    String? clean(Object? v) {
+      final t = v?.toString().trim() ?? '';
+      return t.isEmpty || t == 'null' ? null : t;
+    }
+
+    return Campus(
+      id: '${json['id']}',
+      name: clean(json['name']) ?? '',
+      shortName: clean(json['short_name']),
+      area: clean(json['area']),
+      deliveryFee: json['delivery_fee'] is num
+          ? (json['delivery_fee'] as num).toDouble()
+          : double.tryParse('${json['delivery_fee']}'),
+    );
+  }
 }
 
 /// A delivery address, as stored by the backend.
@@ -48,6 +119,8 @@ class Address {
     this.formatted,
     this.latitude,
     this.longitude,
+    this.campusId,
+    this.campusName,
   });
 
   final String id;
@@ -70,11 +143,22 @@ class Address {
   final double? latitude;
   final double? longitude;
 
+  /// Set when this is a "deliver to my campus" address.
+  final String? campusId;
+  final String? campusName;
+
   bool get hasPin => latitude != null && longitude != null;
+  bool get isCampus => campusId != null;
 
   String get summary {
     final own = formatted?.trim();
     if (own != null && own.isNotEmpty) return own;
+    if (isCampus) {
+      return [details ?? '', campusName ?? line1]
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .join(' · ');
+    }
     return [line1, district, city]
         .map((part) => part.trim())
         .where((part) => part.isNotEmpty)
@@ -144,6 +228,7 @@ class ShopOrderItem {
     this.productId,
     this.image = '',
     this.vendorName,
+    this.options = const {},
   });
 
   final String id;
@@ -158,6 +243,12 @@ class ShopOrderItem {
   final double price;
   final double total;
   final String status;
+
+  /// What the shopper chose, e.g. `{"Size": "M"}`. Empty for plain products
+  /// and for orders placed before options existed.
+  final Map<String, String> options;
+
+  String get optionsLabel => describeChosenOptions(options);
 
   Money get lineTotal => Money(total);
   Money get unitPrice => Money(price);

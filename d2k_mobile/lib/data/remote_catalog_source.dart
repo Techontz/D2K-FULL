@@ -161,6 +161,10 @@ class RemoteCatalogSource {
       description: '${json['description'] ?? ''}',
       shortDescription: '${json['short_description'] ?? ''}',
       specifications: _specifications(json['specifications']),
+      // Choices the shopper must make (size, colour…). The backend leaves
+      // these attributes out of `specifications`, so nothing shows twice.
+      options: ProductOption.listFromJson(json['options']),
+      hasOptionsHint: json['has_options'] == true,
       reviews: detailed ? _reviews(json['reviews']) : const [],
       // "Only N left" is a real stock figure, not a manufactured urgency cue.
       flashSaleUnitsLeft: stock > 0 && stock <= 5 ? stock : null,

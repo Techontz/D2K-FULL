@@ -8,10 +8,11 @@ import { BRAND } from "@/lib/brand";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
-import type { ProductCard as ProductCardModel, ProductDetail } from "@/lib/types";
+import type { ProductCard as ProductCardModel, ProductDetail, SelectedOptions } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { ProductGallery } from "@/components/product/ProductGallery";
+import { ProductOptions, firstMissingOption, optionCardId } from "@/components/product/ProductOptions";
 import { ProductShelf } from "@/components/product/ProductShelf";
 import { SellerActions, SellerPanel } from "@/components/product/SellerPanel";
 import { ChatPanel } from "@/components/chat/ChatPanel";
@@ -50,6 +51,10 @@ function ProductContent() {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Chosen size/colour etc. Nothing is pre-selected on purpose.
+  const [selected, setSelected] = useState<SelectedOptions>({});
+  const [missingOption, setMissingOption] = useState<string | null>(null);
+  const [flashKey, setFlashKey] = useState(0);
 
   const cart = useCart();
   const wishlist = useWishlist();
@@ -61,6 +66,8 @@ function ProductContent() {
     setMissing(false);
     setActiveImage(0);
     setQuantity(1);
+    setSelected({});
+    setMissingOption(null);
     // A fresh product means scrolling back to the top — otherwise following a
     // related-product link lands the shopper halfway down the new page.
     window.scrollTo({ top: 0 });
@@ -83,17 +90,42 @@ function ProductContent() {
   const { product, related, from_vendor: fromVendor } = data;
   const saved = wishlist.has(product.id);
   const images = product.images.length > 0 ? product.images : [];
+  const options = product.options ?? [];
+
+  /**
+   * Every option needs a value before anything reaches the cart. The first
+   * one skipped is scrolled to and flashed — on a phone it is often above the
+   * sticky buy bar the shopper just tapped, out of sight.
+   */
+  function optionsChosen(): boolean {
+    const missing = firstMissingOption(options, selected);
+    if (!missing) return true;
+
+    setMissingOption(missing.name);
+    setFlashKey((key) => key + 1);
+    document
+      .getElementById(optionCardId(missing))
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return false;
+  }
+
+  function chooseOption(name: string, value: string) {
+    setSelected((current) => ({ ...current, [name]: value }));
+    if (missingOption === name) setMissingOption(null);
+  }
 
   function addToCart() {
     if (!product.in_stock) return;
-    cart.add(toCardModel(product), quantity);
+    if (!optionsChosen()) return;
+    cart.add(toCardModel(product), quantity, options.length > 0 ? selected : null);
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1600);
   }
 
   function buyNow() {
     if (!product.in_stock) return;
-    cart.add(toCardModel(product), quantity);
+    if (!optionsChosen()) return;
+    cart.add(toCardModel(product), quantity, options.length > 0 ? selected : null);
     router.push("/checkout");
   }
 
@@ -200,6 +232,14 @@ function ProductContent() {
               ) : null}
             </div>
           </div>
+
+          <ProductOptions
+            options={options}
+            selected={selected}
+            onSelect={chooseOption}
+            missing={missingOption}
+            flashKey={flashKey}
+          />
 
           {/* quantity + actions */}
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -432,6 +472,7 @@ function toCardModel(product: ProductDetail): ProductCardModel {
     rating: { average: product.rating.average, count: product.rating.count },
     stock: product.stock,
     in_stock: product.in_stock,
+    has_options: (product.options?.length ?? 0) > 0,
     category: product.category ?? undefined,
     subcategory: product.subcategory ?? undefined,
     vendor: product.vendor ? { id: product.vendor.id, name: product.vendor.name } : undefined,

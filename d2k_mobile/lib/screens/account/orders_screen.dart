@@ -149,6 +149,13 @@ class _OrderCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.meta,
                         ),
+                        if (item.options.isNotEmpty)
+                          Text(
+                            item.optionsLabel,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.metaMuted,
+                          ),
                         if (item.vendorName != null)
                           Text(item.vendorName!, style: AppTypography.metaMuted),
                       ],

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Address, AddressInput } from "@/lib/types";
 import { Button } from "@/components/ui/Primitives";
+import { CampusPicker, DeliveryKindToggle } from "@/components/location/CampusPicker";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -32,7 +33,11 @@ const EMPTY: AddressInput = {
   latitude: null,
   longitude: null,
   is_default: false,
+  campus_id: null,
 };
+
+/** Where a campus address is, when the campus itself does not say. */
+const CAMPUS_REGION = "Dar es Salaam";
 
 /**
  * Add / edit form for a delivery address.
@@ -67,9 +72,14 @@ export function AddressForm({
           latitude: initial.latitude,
           longitude: initial.longitude,
           is_default: initial.is_default,
+          campus_id: initial.campus?.id ?? null,
         }
       : { ...EMPTY, is_default: forceDefault },
   );
+
+  // A campus address swaps region/city/street for a campus and a room line.
+  const [isCampus, setIsCampus] = useState(Boolean(initial?.campus));
+  const [campusArea, setCampusArea] = useState<string | null>(null);
 
   const [errors, setErrors] = useState<Partial<Record<keyof AddressInput, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -84,8 +94,14 @@ export function AddressForm({
 
     if (!values.full_name.trim()) next.full_name = t("address.errName");
     if (!values.phone.trim()) next.phone = t("address.errPhone");
-    if (!values.region.trim()) next.region = t("address.errRegion");
-    if (!values.city.trim()) next.city = t("address.errCity");
+
+    if (isCampus) {
+      if (!values.campus_id) next.campus_id = t("campus.errCampus");
+      if (!values.details?.trim()) next.details = t("campus.errRoom");
+    } else {
+      if (!values.region.trim()) next.region = t("address.errRegion");
+      if (!values.city.trim()) next.city = t("address.errCity");
+    }
 
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -97,8 +113,30 @@ export function AddressForm({
 
     setSaving(true);
     try {
+      if (isCampus) {
+        // The backend fills region/city/street/pin from the campus; sending
+        // sensible values as well keeps an older API from rejecting the form.
+        await onSubmit({
+          ...values,
+          full_name: values.full_name.trim(),
+          phone: values.phone.trim(),
+          region: CAMPUS_REGION,
+          city: campusArea || values.city.trim() || CAMPUS_REGION,
+          district: null,
+          street: null,
+          details: values.details?.trim() || null,
+          // A pin left over from a pre-campus version of this address would
+          // point the courier somewhere else; the campus supplies its own.
+          latitude: initial?.campus?.id === values.campus_id ? values.latitude : null,
+          longitude: initial?.campus?.id === values.campus_id ? values.longitude : null,
+          is_default: forceDefault ? true : values.is_default,
+        });
+        return;
+      }
+
       await onSubmit({
         ...values,
+        campus_id: null,
         full_name: values.full_name.trim(),
         phone: values.phone.trim(),
         region: values.region.trim(),
@@ -122,6 +160,16 @@ export function AddressForm({
         {initial ? t("address.formEdit") : t("address.formAdd")}
       </h2>
 
+      <div className="mb-3">
+        <DeliveryKindToggle
+          campus={isCampus}
+          onChange={(next) => {
+            setIsCampus(next);
+            setErrors({});
+          }}
+        />
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
           label={t("address.fullName")}
@@ -140,59 +188,84 @@ export function AddressForm({
           autoComplete="tel"
         />
 
-        <label className="block">
-          <span className="mb-1 block text-[12px] font-bold text-[color:var(--color-ink-muted)]">
-            {t("address.region")}
-          </span>
-          <select
-            value={values.region}
-            onChange={(event) => set("region", event.target.value)}
-            className="h-11 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] bg-[color:var(--color-surface)] px-3 text-sm outline-none focus:border-[color:var(--color-action)]"
-          >
-            <option value="">{t("address.selectRegion")}</option>
-            {TZ_REGIONS.map((region) => (
-              <option key={region} value={region}>{region}</option>
-            ))}
-          </select>
-          {errors.region ? <FieldError message={errors.region} /> : null}
-        </label>
+        {isCampus ? null : (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-bold text-[color:var(--color-ink-muted)]">
+                {t("address.region")}
+              </span>
+              <select
+                value={values.region}
+                onChange={(event) => set("region", event.target.value)}
+                className="h-11 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] bg-[color:var(--color-surface)] px-3 text-sm outline-none focus:border-[color:var(--color-action)]"
+              >
+                <option value="">{t("address.selectRegion")}</option>
+                {TZ_REGIONS.map((region) => (
+                  <option key={region} value={region}>{region}</option>
+                ))}
+              </select>
+              {errors.region ? <FieldError message={errors.region} /> : null}
+            </label>
 
-        <Field
-          label={t("address.city")}
-          value={values.city}
-          error={errors.city}
-          onChange={(v) => set("city", v)}
-          placeholder={t("address.cityPlaceholder")}
-        />
-        <Field
-          label={t("address.district")}
-          hint={t("common.optional")}
-          value={values.district ?? ""}
-          onChange={(v) => set("district", v)}
-          placeholder={t("address.districtPlaceholder")}
-        />
-        <Field
-          label={t("address.street")}
-          hint={t("common.optional")}
-          value={values.street ?? ""}
-          onChange={(v) => set("street", v)}
-          placeholder={t("address.streetPlaceholder")}
-        />
+            <Field
+              label={t("address.city")}
+              value={values.city}
+              error={errors.city}
+              onChange={(v) => set("city", v)}
+              placeholder={t("address.cityPlaceholder")}
+            />
+            <Field
+              label={t("address.district")}
+              hint={t("common.optional")}
+              value={values.district ?? ""}
+              onChange={(v) => set("district", v)}
+              placeholder={t("address.districtPlaceholder")}
+            />
+            <Field
+              label={t("address.street")}
+              hint={t("common.optional")}
+              value={values.street ?? ""}
+              onChange={(v) => set("street", v)}
+              placeholder={t("address.streetPlaceholder")}
+            />
+          </>
+        )}
       </div>
 
-      <label className="mt-3 block">
-        <span className="mb-1 block text-[12px] font-bold text-[color:var(--color-ink-muted)]">
-          {t("address.notes")} <span className="font-normal">({t("common.optional")})</span>
-        </span>
-        <textarea
-          value={values.details ?? ""}
-          onChange={(event) => set("details", event.target.value)}
-          rows={2}
-          maxLength={500}
-          placeholder={t("address.notesPlaceholder")}
-          className="w-full resize-y rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] bg-[color:var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[color:var(--color-action)]"
-        />
-      </label>
+      {isCampus ? (
+        <div className="mt-3 space-y-3">
+          <CampusPicker
+            value={values.campus_id ?? null}
+            error={errors.campus_id}
+            onChange={(campus) => {
+              set("campus_id", campus.id);
+              setCampusArea(campus.area);
+            }}
+          />
+          <Field
+            label={t("campus.room")}
+            value={values.details ?? ""}
+            error={errors.details}
+            onChange={(v) => set("details", v)}
+            placeholder={t("campus.roomPlaceholder")}
+            maxLength={500}
+          />
+        </div>
+      ) : (
+        <label className="mt-3 block">
+          <span className="mb-1 block text-[12px] font-bold text-[color:var(--color-ink-muted)]">
+            {t("address.notes")} <span className="font-normal">({t("common.optional")})</span>
+          </span>
+          <textarea
+            value={values.details ?? ""}
+            onChange={(event) => set("details", event.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder={t("address.notesPlaceholder")}
+            className="w-full resize-y rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] bg-[color:var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[color:var(--color-action)]"
+          />
+        </label>
+      )}
 
       <label className="mt-3 flex items-center gap-2">
         <input

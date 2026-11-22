@@ -46,7 +46,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   int _imageIndex = 0;
   int _quantity = 1;
-  String? _selectedVariant;
+
+  /// The shopper's choices: option name -> value. Empty until they tap.
+  final Map<String, String> _chosen = {};
+
+  /// Scroll targets for each option card, so a missing choice can be shown.
+  final Map<String, GlobalKey> _optionKeys = {};
+
+  /// The option the shopper tried to skip, outlined until they choose.
+  String? _missingOption;
   bool _showBackToTop = false;
 
   /// The list payload renders instantly; the full record — description,
@@ -84,6 +92,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       setState(() {
         _product = full;
         _loadingDetail = false;
+        // Drop any choice that the fresh record no longer offers.
+        _chosen.removeWhere(
+          (name, value) => !full.options.any(
+            (o) => o.name == name && o.values.contains(value),
+          ),
+        );
       });
 
       final related = await repo.related(full);
@@ -107,12 +121,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _addToCart() {
-    context.read<CartController>().add(
-          product,
-          quantity: _quantity,
-          variantLabel: _selectedVariant,
-        );
     final strings = context.strings;
+
+    // Every option needs a value before the line can exist.
+    for (final option in product.options) {
+      if (!_chosen.containsKey(option.name)) {
+        setState(() => _missingOption = option.name);
+        D2KToast.show(
+          context,
+          strings.chooseOption(option.name),
+          icon: Icons.touch_app_outlined,
+        );
+        final target = _optionKeys[option.name]?.currentContext;
+        if (target != null) {
+          Scrollable.ensureVisible(
+            target,
+            alignment: 0.3,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        return;
+      }
+    }
+
+    context.read<CartController>().add(
+      product,
+      quantity: _quantity,
+      options: {
+        for (final option in product.options)
+          option.name: _chosen[option.name]!,
+      },
+    );
     D2KToast.show(
       context,
       '${product.title} · ${strings.addToCart}',
@@ -169,9 +209,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               SliverToBoxAdapter(child: _sellerStrip()),
               SliverToBoxAdapter(child: _mainCard(strings)),
+              if (product.options.isNotEmpty)
+                SliverToBoxAdapter(child: _optionsSection(strings)),
               SliverToBoxAdapter(child: _deliveryCard(strings)),
-              if (product.variantGroups.isNotEmpty)
-                SliverToBoxAdapter(child: _variantCard()),
               SliverToBoxAdapter(child: _trustRow(strings)),
               SliverToBoxAdapter(
                 child: _shelf(strings.relatedProducts, related),
@@ -562,31 +602,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return '${from.day} - ${to.day} ${months[to.month - 1]}';
   }
 
-  Widget _variantCard() {
+  /// One light-grey card per option — "Size", "Color", "Shoe Size (EU)" —
+  /// with a pill per value. Nothing is pre-selected: the shopper has to say
+  /// which one they want, because the seller ships exactly that.
+  Widget _optionsSection(AppStrings strings) {
     return _Card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final group in product.variantGroups) ...[
-            Text(group.name, style: AppTypography.sectionTitleSmall),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final option in group.options)
-                  ChoiceChip(
-                    label: Text(option.label),
-                    selected: _selectedVariant == option.label,
-                    selectedColor: AppColors.primarySoft,
-                    labelStyle: AppTypography.buttonSmall,
-                    onSelected: (selected) => setState(
-                      () => _selectedVariant = selected ? option.label : null,
-                    ),
-                  ),
-              ],
+          for (final (index, option) in product.options.indexed) ...[
+            if (index > 0) const SizedBox(height: 10),
+            _OptionCard(
+              key: _optionKeys.putIfAbsent(option.name, GlobalKey.new),
+              option: option,
+              selected: _chosen[option.name],
+              highlighted: _missingOption == option.name,
+              onSelected: (value) => setState(() {
+                _chosen[option.name] = value;
+                if (_missingOption == option.name) _missingOption = null;
+              }),
             ),
-            const SizedBox(height: 12),
           ],
         ],
       ),
@@ -925,7 +960,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 expand: true,
                 height: 54,
                 color: AppColors.primary,
-                onPressed: product.inStock ? _addToCart : null,
+                // Held back only while the full record is loading: until then
+                // nobody knows whether a size or colour has to be chosen.
+                onPressed:
+                    product.inStock && !_loadingDetail ? _addToCart : null,
               ),
             ),
           ],
@@ -1084,6 +1122,127 @@ class _AccordionState extends State<_Accordion> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A light-grey rounded card: bold option name, then one pill per value.
+/// The chosen pill is filled in the primary colour; the rest are outlined.
+class _OptionCard extends StatelessWidget {
+  const _OptionCard({
+    super.key,
+    required this.option,
+    required this.selected,
+    required this.highlighted,
+    required this.onSelected,
+  });
+
+  final ProductOption option;
+  final String? selected;
+  final bool highlighted;
+  final ValueChanged<String> onSelected;
+
+  static const Color _cardGrey = Color(0xFFF3F3F5);
+  static const Color _alert = Color(0xFFD3302F);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: highlighted ? const Color(0xFFFDECEC) : _cardGrey,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: highlighted ? _alert : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(
+              text: option.name,
+              children: [
+                if (selected != null)
+                  TextSpan(
+                    text: ': $selected',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+            style: AppTypography.sectionTitleSmall.copyWith(
+              fontWeight: FontWeight.w800,
+              color: highlighted ? _alert : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final value in option.values)
+                _OptionPill(
+                  label: value,
+                  selected: value == selected,
+                  onTap: () => onSelected(value),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionPill extends StatelessWidget {
+  const _OptionPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppColors.primary : AppColors.surface,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: selected ? AppColors.primary : AppColors.lineStrong,
+            width: 1.2,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 38),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTypography.buttonSmall.copyWith(
+                  color: selected
+                      ? AppColors.textInverse
+                      : AppColors.textPrimary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

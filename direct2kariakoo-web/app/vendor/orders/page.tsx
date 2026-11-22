@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatDate, formatMoney } from "@/lib/format";
 import vendorApi, { type VendorOrder } from "@/lib/vendor";
 import { Button, EmptyState, Skeleton, Tag } from "@/components/ui/Primitives";
+import { formatOptions } from "@/lib/options";
 
 /**
  * Vendor order fulfilment.
@@ -139,6 +140,11 @@ export default function VendorOrdersPage() {
 
                   <div className="min-w-0 flex-1">
                     <p className="clamp-2 text-[13px] font-semibold">{order.product?.name ?? "Product removed"}</p>
+                    {formatOptions(order.options) ? (
+                      <p className="text-[12px] font-semibold text-[color:var(--color-ink)]">
+                        {formatOptions(order.options)}
+                      </p>
+                    ) : null}
                     <p className="text-[12px] text-[color:var(--color-ink-muted)]">
                       {order.quantity} × {formatMoney(order.price)}
                     </p>

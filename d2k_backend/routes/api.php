@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\VendorPaymentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Shop\AddressController as ShopAddressController;
+use App\Http\Controllers\Api\Shop\CampusController as ShopCampusController;
 use App\Http\Controllers\Api\Shop\CatalogController as ShopCatalogController;
 use App\Http\Controllers\Api\Shop\CheckoutController as ShopCheckoutController;
 use App\Http\Controllers\Api\Shop\ChatController as ShopChatController;
@@ -51,7 +52,11 @@ Route::prefix('shop')->group(function () {
     Route::get('/categories', [ShopCatalogController::class, 'categories']);
     Route::get('/vendors', [ShopCatalogController::class, 'vendors']);
     Route::get('/categories/{id}', [ShopCatalogController::class, 'category'])->whereNumber('id');
+    Route::get('/campuses', [ShopCampusController::class, 'index']);
 });
+
+// Same list for the mobile app.
+Route::get('/campuses', [ShopCampusController::class, 'index']);
 
 // ---------------- PUBLIC ROUTES ----------------
 Route::get('/banners', [BannerController::class, 'index']);

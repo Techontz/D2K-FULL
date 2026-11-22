@@ -144,6 +144,8 @@ class VendorController extends Controller
                 'reference'  => $order->reference,
                 'status'     => $order->status,
                 'quantity'   => (int) $order->quantity,
+                // What the customer chose, e.g. {"Size": "M"}; null if nothing.
+                'options'    => $order->options,
                 'price'      => (float) $order->price,
                 'total'      => (float) $order->total,
                 'placed_at'  => optional($order->created_at)->toIso8601String(),

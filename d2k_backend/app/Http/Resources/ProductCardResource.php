@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Support\Media;
 use App\Support\Money;
+use App\Support\ProductOptions;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -37,6 +38,11 @@ class ProductCardResource extends JsonResource
             ],
             'stock'    => (int) $this->stock,
             'in_stock' => $this->stock > 0,
+            // True when the shopper must choose a size/colour first, so a grid
+            // "add to cart" opens the product instead. Read from the
+            // attributeValues relation the Product model always eager-loads,
+            // so this costs no query per card.
+            'has_options' => ProductOptions::forProduct($this->resource) !== [],
             'category' => $this->whenLoaded('category', fn () => [
                 'id'   => $this->category->id,
                 'name' => $this->category->name,

@@ -33,6 +33,10 @@ class ProductController extends Controller
             ], 403);
         }
 
+        if ($invalid = $this->flattenMultiValueAttributes($request)) {
+            return $invalid;
+        }
+
         $rules = [
             'name'           => 'required|string|max:100',
             'category_id'    => 'required|exists:categories,id',
@@ -186,6 +190,10 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found.'], 404);
         }
 
+        if ($invalid = $this->flattenMultiValueAttributes($request)) {
+            return $invalid;
+        }
+
         $rules = [
             'name'           => 'sometimes|required|string|max:100',
             'category_id'    => 'sometimes|required|exists:categories,id',
@@ -239,8 +247,11 @@ class ProductController extends Controller
                 $product->images()->whereIn('id', $ids)->delete();
             }
 
-            $product->attributeValues()->delete();
+            // Attribute values are replaced only when the client actually
+            // sent `attributes`. An update that only changes the price must
+            // not silently erase the product's sizes, colours and specs.
             if ($request->has('attributes')) {
+                $product->attributeValues()->delete();
                 foreach ($request->input('attributes') as $attrId => $value) {
                     if ($value !== null && $value !== '') {
                         $product->attributeValues()->create([
@@ -419,6 +430,8 @@ class ProductController extends Controller
                 'new_price'      => $product->new_price,
                 'stock'          => $product->stock,
                 'images'         => $product->images->map(fn($img) => asset('storage/' . $img->image)),
+                // Choices the customer must make before adding to cart.
+                'options'        => \App\Support\ProductOptions::forProduct($product),
                 'category'       => $product->category ? [
                     'id'   => $product->category->id,
                     'name' => $product->category->name,
@@ -483,6 +496,72 @@ class ProductController extends Controller
             Log::error('Search failed: ' . $e->getMessage());
             return response()->json(['message' => 'Server error', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * A multiselect attribute (e.g. the sizes a product comes in) may arrive as
+     * a list — `attributes[4][]=M&attributes[4][]=L` or JSON `{"4": ["M","L"]}`.
+     * It is stored the way such selections are already stored: one row per
+     * attribute, the values comma-separated ("M, L"), which product detail
+     * splits back into `options[].values`.
+     *
+     * Every listed value must be one of the attribute's administrator-curated
+     * values when it has any (matched case-insensitively, stored in the
+     * curated spelling). Plain strings are left exactly as before.
+     */
+    private function flattenMultiValueAttributes(Request $request): ?\Illuminate\Http\JsonResponse
+    {
+        $attributes = $request->input('attributes');
+
+        if (! is_array($attributes)) {
+            return null;
+        }
+
+        $errors = [];
+
+        foreach ($attributes as $id => $value) {
+            if (! is_array($value)) {
+                continue;
+            }
+
+            $values    = \App\Support\ProductOptions::splitValues($value);
+            $attribute = \App\Models\Attribute::with('values')->find($id);
+
+            if (! $attribute) {
+                $errors["attributes.$id"][] = 'Unknown attribute.';
+                continue;
+            }
+
+            $curated = $attribute->values->pluck('value');
+            if ($curated->isNotEmpty()) {
+                foreach ($values as $i => $v) {
+                    $match = $curated->first(fn ($c) => mb_strtolower($c) === mb_strtolower($v));
+                    if ($match === null) {
+                        $errors["attributes.$id"][] = sprintf('"%s" is not an allowed %s.', $v, $attribute->name);
+                    } else {
+                        $values[$i] = $match;
+                    }
+                }
+            }
+
+            $joined = implode(', ', $values);
+            if (mb_strlen($joined) > 255) {
+                $errors["attributes.$id"][] = 'Too many values selected.';
+            }
+
+            $attributes[$id] = $joined;
+        }
+
+        if ($errors) {
+            return response()->json([
+                'message' => 'Invalid product data.',
+                'errors'  => $errors,
+            ], 422);
+        }
+
+        $request->merge(['attributes' => $attributes]);
+
+        return null;
     }
 
     /* -------------------------------------------------------------------------- */

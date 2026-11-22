@@ -538,6 +538,8 @@ export const fr: Dictionary = {
     pricing: "Prix et stock",
     attributes: "Caractéristiques",
     attributesHint: "Caractéristiques filtrables. Laissez vide ce qui ne s'applique pas.",
+    variantHint: "Le client en choisira une",
+    variantRequired: "Choisissez au moins une valeur : {name}",
     name: "Nom du produit",
     shortDescription: "Description courte",
     shortHint: "Une ligne visible dans les résultats de recherche.",
@@ -563,6 +565,29 @@ export const fr: Dictionary = {
     saved: "Produit enregistré",
     addAnother: "Ajouter un autre produit",
     backToProducts: "Retour à mes produits",
+  },
+
+  options: {
+    choose: "Choisissez : {name}",
+    chooseOnProduct: "Choisissez les options de {name}",
+  },
+
+  campus: {
+    deliverToCampus: "Livrer sur mon campus",
+    deliverToCampusHint: "Résidence universitaire à Dar es Salaam",
+    otherAddress: "Domicile ou autre adresse",
+    choose: "Choisissez votre campus",
+    search: "Rechercher un campus",
+    noResults: "Aucun campus ne correspond à « {query} »",
+    loading: "Chargement des campus…",
+    loadFailed: "Impossible de charger les campus. Réessayez.",
+    room: "Résidence, bloc et chambre",
+    roomPlaceholder: "ex. Hall 5, Bloc B, Chambre 12",
+    errCampus: "Choisissez votre campus",
+    errRoom: "Indiquez la résidence, le bloc et la chambre",
+    fee: "Livraison campus {amount}",
+    badge: "Campus",
+    savedNote: "Enregistrée dans votre carnet d'adresses.",
   },
 
   footer: {

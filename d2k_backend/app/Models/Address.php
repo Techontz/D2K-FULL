@@ -11,7 +11,7 @@ class Address extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'full_name', 'phone', 'region', 'city',
+        'user_id', 'campus_id', 'full_name', 'phone', 'region', 'city',
         'district', 'street', 'details', 'latitude', 'longitude', 'is_default',
     ];
 
@@ -24,6 +24,12 @@ class Address extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The university or college this address delivers to, if any. */
+    public function campus(): BelongsTo
+    {
+        return $this->belongsTo(Campus::class);
     }
 
     /**

@@ -33,6 +33,8 @@ class Order extends Model
         'delivery_address',
         'customer_phone',
         'external_id',
+        // What the customer chose for this line, e.g. {"Size": "M"}.
+        'options',
     ];
 
     protected $casts = [
@@ -41,6 +43,18 @@ class Order extends Model
         'delivery_fee' => 'decimal:2',
         'quantity'     => 'integer',
     ];
+
+    /** Null when the line has no options (or predates them). */
+    public function getOptionsAttribute($value): ?array
+    {
+        return \App\Support\ProductOptions::present($value);
+    }
+
+    public function setOptionsAttribute($value): void
+    {
+        $value = \App\Support\ProductOptions::present($value);
+        $this->attributes['options'] = $value === null ? null : json_encode($value, JSON_UNESCAPED_UNICODE);
+    }
 
     public function buyer()
     {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Shop;
 
 use App\Http\Controllers\Controller;
 use App\Services\Checkout\CheckoutBuilder;
+use App\Services\Delivery\DeliveryDestination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -34,18 +35,28 @@ class CheckoutController extends Controller
             'items'              => ['required', 'array', 'min:1', 'max:50'],
             'items.*.product_id' => ['required', 'integer'],
             'items.*.quantity'   => ['required', 'integer', 'min:1', 'max:99'],
+            // {"Size": "M"} — validated against the product by the builder.
+            'items.*.options'    => ['sometimes', 'nullable'],
 
             // The destination pin, when the customer has dropped one. Delivery
             // is quoted from it; without it the fee stays pending.
             'delivery_latitude'  => ['nullable', 'numeric', 'between:-90,90'],
             'delivery_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+
+            // A saved address (the caller's own) and/or a campus. A campus
+            // with a flat delivery fee is charged that fee.
+            'address_id'         => ['nullable', 'integer'],
+            'campus_id'          => ['nullable', 'integer'],
         ]);
+
+        $destination = DeliveryDestination::fromInput($data, $request->user());
 
         return response()->json(
             $this->builder->build(
                 $data['items'],
-                isset($data['delivery_latitude']) ? (float) $data['delivery_latitude'] : null,
-                isset($data['delivery_longitude']) ? (float) $data['delivery_longitude'] : null,
+                $destination->latitude,
+                $destination->longitude,
+                $destination,
             )
         );
     }

@@ -7,12 +7,15 @@ import { apiError } from "@/lib/api";
 import { BRAND } from "@/lib/brand";
 import { formatMoney } from "@/lib/format";
 import shop from "@/lib/shop";
-import type { Address as AddressType, CheckoutPreview } from "@/lib/types";
+import type { Address as AddressType, Campus, CheckoutPreview } from "@/lib/types";
+import { formatOptions, normaliseOptions, optionsKey } from "@/lib/options";
+import type { CheckoutItem } from "@/lib/shop";
 import { useT } from "@/lib/i18n";
 import { useLocation } from "@/lib/store/location";
 import { LocationPicker } from "@/components/location/LocationPicker";
+import { CampusPicker, DeliveryKindToggle, campusLabel } from "@/components/location/CampusPicker";
 import { useAuth } from "@/lib/store/auth";
-import { useCart } from "@/lib/store/cart";
+import { keyOf, useCart, type CartLine } from "@/lib/store/cart";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { Button, ButtonLink, EmptyState } from "@/components/ui/Primitives";
 
@@ -44,6 +47,15 @@ function CheckoutContent() {
   // one-off destination is not overwritten when the saved list arrives.
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+
+  // "Deliver to my campus": a campus and a hostel/room line instead of a
+  // free-text address. Saved to the address book when the order is placed,
+  // so next time it is one tap.
+  const [campusMode, setCampusMode] = useState(false);
+  const [campus, setCampus] = useState<Campus | null>(null);
+  const [room, setRoom] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [campusError, setCampusError] = useState<string | null>(null);
   // The shopper pays each seller on that seller's own Lipa Namba. Mobile money
   // is shown but not selectable: pretending an unintegrated provider took the
   // money would create an order nobody has actually paid for.
@@ -72,6 +84,10 @@ function CheckoutContent() {
   useEffect(() => {
     if (user?.phone && !phone) setPhone(user.phone);
   }, [user, phone]);
+
+  useEffect(() => {
+    if (user?.name && !recipientName) setRecipientName(user.name);
+  }, [user, recipientName]);
 
   // Pull the address book once signed in and preselect the default, so the
   // common case is one click rather than retyping a known address.
@@ -108,6 +124,7 @@ function CheckoutContent() {
   }, [pinned, address, selectedId]);
 
   function chooseAddress(item: AddressType) {
+    setCampusMode(false);
     setSelectedId(item.id);
     setAddress(item.formatted);
     if (item.phone) setPhone(item.phone);
@@ -130,7 +147,17 @@ function CheckoutContent() {
   // Re-price whenever the basket or the destination changes. The request is
   // cancelled on the way out so a slow reply for an old basket cannot land
   // after a newer one and show the shopper stale figures.
-  const cartKey = cart.lines.map((line) => `${line.product.id}x${line.quantity}`).join(",");
+  const cartKey = cart.lines
+    .map((line) => `${line.product.id}x${line.quantity}:${optionsKey(line.options)}`)
+    .join(",");
+
+  // Which campus, if any, the delivery is going to — a saved campus address or
+  // one being entered now. Sent with the preview so a campus fee shows up.
+  const selectedAddress = saved.find((item) => item.id === selectedId) ?? null;
+  const campusId = campusMode ? campus?.id ?? null : selectedAddress?.campus?.id ?? null;
+  // A campus being entered now has no pin of its own here; the server knows
+  // where the campus is. A pin from the header would price the wrong trip.
+  const sendCoords = campusMode ? null : coords;
 
   useEffect(() => {
     if (!cart.ready || cart.lines.length === 0) {
@@ -142,12 +169,11 @@ function CheckoutContent() {
 
     shop
       .checkoutPreview({
-        items: cart.lines.map((line) => ({
-          product_id: line.product.id,
-          quantity: line.quantity,
-        })),
-        delivery_latitude: coords?.latitude ?? null,
-        delivery_longitude: coords?.longitude ?? null,
+        items: toCheckoutItems(cart.lines),
+        delivery_latitude: sendCoords?.latitude ?? null,
+        delivery_longitude: sendCoords?.longitude ?? null,
+        address_id: campusMode ? null : selectedId,
+        campus_id: campusId,
       })
       .then((result) => {
         if (cancelled) return;
@@ -172,7 +198,7 @@ function CheckoutContent() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartKey, cart.ready, coords?.latitude, coords?.longitude, isAuthenticated]);
+  }, [cartKey, cart.ready, sendCoords?.latitude, sendCoords?.longitude, isAuthenticated, selectedId, campusMode, campusId]);
 
   const groups = preview?.vendor_groups ?? [];
   const deliveryFee = preview?.delivery.status === "quoted" ? preview.delivery.amount : null;
@@ -214,22 +240,66 @@ function CheckoutContent() {
 
     // The whole basket, in one order, paid for in one payment. There is no
     // per-seller split any more: every item goes on the same order.
-    const items = cart.lines.map((line) => ({
-      product_id: line.product.id,
-      quantity: line.quantity,
-    }));
+    const items = toCheckoutItems(cart.lines);
+
+    if (campusMode && !campus) {
+      setCampusError(t("campus.errCampus"));
+      return;
+    }
 
     setPlacing(true);
     setError(null);
 
     try {
+      let deliveryAddress = address.trim();
+      let addressId = campusMode ? null : selectedId;
+
+      // A campus delivery is saved to the address book first, so the order
+      // carries the same courier-readable line the address book shows and the
+      // shopper can reuse it next time.
+      if (campusMode && campus) {
+        const list = await shop.createAddress({
+          full_name: recipientName.trim(),
+          phone: phone.trim(),
+          region: "Dar es Salaam",
+          city: campus.area || "Dar es Salaam",
+          district: null,
+          street: null,
+          details: room.trim(),
+          latitude: null,
+          longitude: null,
+          is_default: saved.length === 0,
+          campus_id: campus.id,
+        });
+        const created =
+          [...list]
+            .sort((a, b) => b.id - a.id)
+            .find((item) => item.campus?.id === campus.id && (item.details ?? "") === room.trim()) ??
+          [...list].sort((a, b) => b.id - a.id)[0];
+
+        if (created) {
+          deliveryAddress = created.formatted;
+          addressId = created.id;
+          // From here on it is a saved address: if placing the order fails,
+          // a retry uses it rather than saving the same room a second time.
+          setSaved(list);
+          setSelectedId(created.id);
+          setAddress(created.formatted);
+          setCampusMode(false);
+        } else {
+          deliveryAddress = `${room.trim()}, ${campus.name}`;
+        }
+      }
+
       const result = await shop.placeOrder({
         items,
-        delivery_address: address.trim(),
+        delivery_address: deliveryAddress,
         customer_phone: phone.trim(),
         payment_method: payment,
-        delivery_latitude: coords?.latitude ?? null,
-        delivery_longitude: coords?.longitude ?? null,
+        delivery_latitude: sendCoords?.latitude ?? null,
+        delivery_longitude: sendCoords?.longitude ?? null,
+        address_id: addressId,
+        campus_id: campusId,
       });
 
       cart.clear();
@@ -284,6 +354,11 @@ function CheckoutContent() {
                       <span className="min-w-0">
                         <span className="flex flex-wrap items-center gap-1">
                           <span className="text-[13px] font-extrabold">{item.full_name}</span>
+                          {item.campus ? (
+                            <span className="rounded-full bg-[color:var(--color-success-soft)] px-[6px] py-[1px] text-[9px] font-black uppercase text-[color:var(--color-success)]">
+                              🎓 {campusLabel(item.campus)}
+                            </span>
+                          ) : null}
                           {item.is_default ? (
                             <span className="rounded-full bg-[color:var(--color-action-soft)] px-[6px] py-[1px] text-[9px] font-black uppercase text-[color:var(--color-action)]">
                               {t("checkout.default")}
@@ -299,7 +374,7 @@ function CheckoutContent() {
 
                   <label
                     className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] p-3 ${
-                      selectedId === null
+                      selectedId === null && !campusMode
                         ? "ring-2 ring-[color:var(--color-action)]"
                         : "ring-1 ring-[color:var(--color-line)]"
                     }`}
@@ -308,35 +383,96 @@ function CheckoutContent() {
                       type="radio"
                       name="saved-address"
                       className="h-4 w-4 shrink-0 accent-[color:var(--color-action)]"
-                      checked={selectedId === null}
+                      checked={selectedId === null && !campusMode}
                       onChange={() => {
+                        setCampusMode(false);
                         setSelectedId(null);
                         setAddress("");
                       }}
                     />
                     <span className="text-[13px] font-semibold">{t("checkout.deliverElsewhere")}</span>
                   </label>
+
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] p-3 ${
+                      campusMode
+                        ? "ring-2 ring-[color:var(--color-action)]"
+                        : "ring-1 ring-[color:var(--color-line)]"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="saved-address"
+                      className="h-4 w-4 shrink-0 accent-[color:var(--color-action)]"
+                      checked={campusMode}
+                      onChange={() => {
+                        setCampusMode(true);
+                        setSelectedId(null);
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold">🎓 {t("campus.deliverToCampus")}</span>
+                      <span className="block text-[11px] text-[color:var(--color-ink-muted)]">
+                        {t("campus.deliverToCampusHint")}
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </fieldset>
-            ) : null}
+            ) : (
+              <div className="mb-3">
+                <DeliveryKindToggle campus={campusMode} onChange={setCampusMode} />
+              </div>
+            )}
 
             <div className="space-y-3">
-              <Field
-                label={t("checkout.deliveryAddress")}
-                value={address}
-                onChange={(event) => setAddress(event.target.value)}
-                required
-                placeholder={t("checkout.addressPlaceholder")}
-                multiline
-              />
-              <button
-                type="button"
-                onClick={() => setMapOpen(true)}
-                className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] px-3 py-2 text-[13px] font-bold text-[color:var(--color-action)] hover:bg-[color:var(--color-action-soft)]"
-              >
-                <MapPinIcon className="h-4 w-4 shrink-0" />
-                {address.trim() ? t("checkout.changeLocation") : t("checkout.pickOnMap")}
-              </button>
+              {campusMode ? (
+                <>
+                  <CampusPicker
+                    value={campus?.id ?? null}
+                    error={campusError ?? undefined}
+                    onChange={(next) => {
+                      setCampus(next);
+                      setCampusError(null);
+                    }}
+                  />
+                  <Field
+                    label={t("campus.room")}
+                    value={room}
+                    onChange={(event) => setRoom(event.target.value)}
+                    required
+                    maxLength={500}
+                    placeholder={t("campus.roomPlaceholder")}
+                  />
+                  <Field
+                    label={t("address.fullName")}
+                    value={recipientName}
+                    onChange={(event) => setRecipientName(event.target.value)}
+                    required
+                    autoComplete="name"
+                  />
+                  <p className="text-[11px] text-[color:var(--color-ink-muted)]">{t("campus.savedNote")}</p>
+                </>
+              ) : (
+                <>
+                  <Field
+                    label={t("checkout.deliveryAddress")}
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    required
+                    placeholder={t("checkout.addressPlaceholder")}
+                    multiline
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMapOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] px-3 py-2 text-[13px] font-bold text-[color:var(--color-action)] hover:bg-[color:var(--color-action-soft)]"
+                  >
+                    <MapPinIcon className="h-4 w-4 shrink-0" />
+                    {address.trim() ? t("checkout.changeLocation") : t("checkout.pickOnMap")}
+                  </button>
+                </>
+              )}
 
               <Field
                 label={t("checkout.phone")}
@@ -468,8 +604,11 @@ function CheckoutContent() {
               {t("checkout.yourItems", { count: cart.count })}
             </h2>
             <ul className="divide-y divide-[color:var(--color-line)]">
-              {cart.lines.map(({ product, quantity }) => (
-                <li key={product.id} className="flex items-center gap-3 py-2.5">
+              {cart.lines.map((line) => {
+                const { product, quantity } = line;
+                const chosen = formatOptions(line.options);
+                return (
+                <li key={keyOf(line)} className="flex items-center gap-3 py-2.5">
                   <span className="h-14 w-14 shrink-0 overflow-hidden rounded-[var(--radius-sm)] bg-white ring-1 ring-[color:var(--color-line)]">
                     {product.image ? (
                       <img src={product.image} alt="" loading="lazy" className="h-full w-full object-contain p-1" />
@@ -477,13 +616,17 @@ function CheckoutContent() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="clamp-1 block text-[13px] font-semibold">{product.name}</span>
+                    {chosen ? (
+                      <span className="block text-[11px] text-[color:var(--color-ink-muted)]">{chosen}</span>
+                    ) : null}
                     <span className="text-[11px] text-[color:var(--color-ink-muted)]">{t("cart.quantity")} {quantity}</span>
                   </span>
                   <span className="shrink-0 text-[14px] font-bold">
                     {formatMoney(product.price.current * quantity)}
                   </span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         </div>
@@ -746,4 +889,16 @@ function MapPinIcon({ className = "" }: { className?: string }) {
       <circle cx="12" cy="10" r="2.6" />
     </svg>
   );
+}
+
+/** Basket lines as checkout sends them — `options` only where something was chosen. */
+function toCheckoutItems(lines: CartLine[]): CheckoutItem[] {
+  return lines.map((line) => {
+    const options = normaliseOptions(line.options);
+    return {
+      product_id: line.product.id,
+      quantity: line.quantity,
+      ...(options ? { options } : {}),
+    };
+  });
 }

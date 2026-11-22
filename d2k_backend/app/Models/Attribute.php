@@ -13,6 +13,13 @@ class Attribute extends Model
         'name',
         'category_id',
         'input_type', 'unit', 'is_active', 'sort_order',
+        // The customer chooses one of the product's values (size, colour…).
+        'is_variant',
+    ];
+
+    protected $casts = [
+        'is_active'  => 'boolean',
+        'is_variant' => 'boolean',
     ];
 
     public function category()

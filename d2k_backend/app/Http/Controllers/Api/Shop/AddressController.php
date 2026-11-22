@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Shop;
 
 use App\Http\Controllers\Controller;
 use App\Models\Address;
+use App\Models\Campus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -55,7 +57,7 @@ class AddressController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $address = $request->user()->addresses()->findOrFail($id);
-        $data    = $this->validated($request);
+        $data    = $this->validated($request, $address);
 
         DB::transaction(function () use ($request, $address, $data) {
             $address->update($data);
@@ -122,25 +124,85 @@ class AddressController extends Controller
             ->update(['is_default' => false]);
     }
 
-    private function validated(Request $request): array
+    /**
+     * Campus delivery: with a `campus_id`, the hostel/block/room line in
+     * `details` is required and everything a campus already answers (region,
+     * city, street, pin) defaults from the campus when not sent.
+     *
+     * On update, leaving `campus_id` out keeps the address's current campus
+     * (older clients do not know the field); sending null clears it.
+     */
+    private function validated(Request $request, ?Address $existing = null): array
     {
-        return $request->validate([
+        $campusesReady = $this->campusesReady();
+        $campusSent    = $campusesReady && $request->has('campus_id');
+        $campusId      = $campusSent ? $request->input('campus_id') : ($existing?->campus_id);
+        $isCampus      = $campusesReady && ! empty($campusId);
+
+        $data = $request->validate([
             'full_name'  => ['required', 'string', 'max:120'],
             'phone'      => ['required', 'string', 'max:40'],
-            'region'     => ['required', 'string', 'max:100'],
-            'city'       => ['required', 'string', 'max:100'],
+            'campus_id'  => $campusesReady
+                ? ['nullable', 'integer', Rule::exists('campuses', 'id')->where('is_active', true)]
+                : ['prohibited'],
+            // Optional: the mobile app's address form has no region field.
+            // Stored as '' when absent (the column is NOT NULL), the same
+            // value the address-book backfill uses for "unknown".
+            'region'     => ['nullable', 'string', 'max:100'],
+            'city'       => [$isCampus ? 'nullable' : 'required', 'string', 'max:100'],
             'district'   => ['nullable', 'string', 'max:100'],
             'street'     => ['nullable', 'string', 'max:180'],
-            'details'    => ['nullable', 'string', 'max:500'],
+            'details'    => [$isCampus ? 'required' : 'nullable', 'string', 'max:500'],
             'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'is_default' => ['sometimes', 'boolean'],
+        ], [
+            'campus_id.exists'  => 'Please choose a campus from the list.',
+            'details.required'  => 'Please add your hostel, block and room.',
         ]);
+
+        if (! $campusSent) {
+            unset($data['campus_id']);
+        }
+
+        if (! $isCampus) {
+            $data['region'] = $data['region'] ?? '';
+        }
+
+        // Clearing the campus also clears the street line that was only ever
+        // the campus name filled in on the customer's behalf.
+        if ($campusSent && ! $isCampus && $existing?->campus_id && ! array_key_exists('street', $data)
+            && $existing->street === $existing->campus?->name) {
+            $data['street'] = null;
+        }
+
+        if ($isCampus && ($campus = Campus::find($campusId))) {
+            $data['region'] = ($data['region'] ?? null) ?: 'Dar es Salaam';
+            $data['city']   = ($data['city'] ?? null) ?: ($campus->area ?: 'Dar es Salaam');
+            $data['street'] = ($data['street'] ?? null) ?: $campus->name;
+
+            if (($data['latitude'] ?? null) === null && ($data['longitude'] ?? null) === null
+                && $campus->latitude !== null && $campus->longitude !== null) {
+                $data['latitude']  = $campus->latitude;
+                $data['longitude'] = $campus->longitude;
+            }
+        }
+
+        return $data;
+    }
+
+    /** False until the campuses migration has run on this server. */
+    private function campusesReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= Schema::hasTable('campuses') && Schema::hasColumn('addresses', 'campus_id');
     }
 
     private function collection(Request $request): array
     {
         return $request->user()->addresses()
+            ->when($this->campusesReady(), fn ($q) => $q->with('campus'))
             ->orderByDesc('is_default')
             ->orderByDesc('id')
             ->get()
@@ -163,6 +225,8 @@ class AddressController extends Controller
             'longitude'  => $address->longitude,
             'is_default' => $address->is_default,
             'formatted'  => $address->formatted,
+            // {"id", "name", "short_name"} when this is a campus address.
+            'campus'     => $address->campus_id ? $address->campus?->toSummary() : null,
         ];
     }
 }

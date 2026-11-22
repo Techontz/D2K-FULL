@@ -176,6 +176,18 @@ class _VendorOrdersScreenState extends State<VendorOrdersScreen> {
                                           overflow: TextOverflow.ellipsis,
                                           style: AppTypography.body,
                                         ),
+                                        if (order.options.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            order.optionsLabel,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.metaMuted
+                                                .copyWith(
+                                                    color: AppColors
+                                                        .textPrimary),
+                                          ),
+                                        ],
                                         const SizedBox(height: 2),
                                         Text('Qty ${order.quantity}',
                                             style: AppTypography.metaMuted),

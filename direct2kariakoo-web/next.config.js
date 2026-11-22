@@ -101,6 +101,11 @@ const nextConfig = {
   },
 
   // 🚫 DO NOT USE output: "export" ON VERCEL
+  //
+  // "standalone" is what the DirectAdmin host runs: `next build` emits
+  // .next/standalone/server.js plus only the node_modules it actually needs,
+  // which is what CloudLinux's "Setup Node.js App" starts. Vercel ignores it.
+  output: "standalone",
 
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",

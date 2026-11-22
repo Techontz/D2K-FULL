@@ -544,6 +544,8 @@ export const sw: Dictionary = {
     pricing: "Bei na hisa",
     attributes: "Vipimo na sifa",
     attributesHint: "Sifa zinazowasaidia wanunuzi kuchuja. Acha wazi zisizohusika.",
+    variantHint: "Wateja watachagua moja",
+    variantRequired: "Chagua angalau {name} moja",
     name: "Jina la bidhaa",
     shortDescription: "Maelezo mafupi",
     shortHint: "Mstari mmoja unaoonekana kwenye matokeo ya utafutaji.",
@@ -569,6 +571,29 @@ export const sw: Dictionary = {
     saved: "Bidhaa imehifadhiwa",
     addAnother: "Ongeza bidhaa nyingine",
     backToProducts: "Rudi kwenye bidhaa zangu",
+  },
+
+  options: {
+    choose: "Chagua {name}",
+    chooseOnProduct: "Chagua machaguo ya {name}",
+  },
+
+  campus: {
+    deliverToCampus: "Peleka chuoni",
+    deliverToCampusHint: "Hosteli ya chuo kikuu au chuo Dar es Salaam",
+    otherAddress: "Nyumbani au mahali pengine",
+    choose: "Chagua chuo",
+    search: "Tafuta chuo",
+    noResults: "Hakuna chuo kinacholingana na “{query}”",
+    loading: "Inapakia vyuo…",
+    loadFailed: "Imeshindikana kupakia vyuo. Jaribu tena.",
+    room: "Hosteli, block na chumba",
+    roomPlaceholder: "mf. Hall 5, Block B, Chumba 12",
+    errCampus: "Chagua chuo chako",
+    errRoom: "Andika hosteli, block na chumba",
+    fee: "Usafirishaji chuoni {amount}",
+    badge: "Chuo",
+    savedNote: "Imehifadhiwa kwenye anwani zako kwa wakati ujao.",
   },
 
   footer: {

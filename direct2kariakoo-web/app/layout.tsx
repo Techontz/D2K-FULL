@@ -28,8 +28,14 @@ export const metadata: Metadata = {
   description: `Shop electronics, fashion, home, beauty and more from trusted ${BRAND.country} sellers. Fast delivery across ${BRAND.city}.`,
   applicationName: BRAND.name,
   icons: {
-    icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/logo.png", type: "image/png" }],
-    apple: "/logo.png",
+    // Square brand mark (yellow d2k). Google Search picks a favicon that is a
+    // multiple of 48px, so the 192px PNG is the one it will show in results.
+    icon: [
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/logo.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
   },
   openGraph: {
     title: BRAND.name,

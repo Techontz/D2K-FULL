@@ -90,6 +90,12 @@ class OrderResource extends Resource
 
                     Forms\Components\TextInput::make('quantity')->numeric()->disabled()->dehydrated(false),
                     Forms\Components\TextInput::make('total')->prefix('TZS')->disabled()->dehydrated(false),
+
+                    // What the customer chose, e.g. "Size: M · Color: Red".
+                    Forms\Components\Placeholder::make('options_display')
+                        ->label('Options')
+                        ->content(fn (?Order $record) => \App\Support\ProductOptions::format($record?->options) ?: '—')
+                        ->columnSpanFull(),
                 ]),
 
             Forms\Components\Section::make('Delivery')
@@ -122,7 +128,9 @@ class OrderResource extends Resource
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Product')
                     ->limit(32)
-                    ->searchable(),
+                    ->searchable()
+                    // The size/colour the customer picked, under the name.
+                    ->description(fn (Order $order) => \App\Support\ProductOptions::format($order->options) ?: null),
 
                 Tables\Columns\TextColumn::make('vendor.business_name')
                     ->label('Vendor')

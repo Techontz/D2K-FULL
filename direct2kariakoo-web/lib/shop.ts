@@ -2,6 +2,7 @@ import api from "./api";
 import type {
   Address,
   AddressInput,
+  Campus,
   CheckoutPreview,
   ChatMessage,
   ChatParticipant,
@@ -14,7 +15,15 @@ import type {
   ProductCard,
   ProductDetail,
   ProductListing,
+  SelectedOptions,
 } from "./types";
+
+/** One basket line as checkout sends it. `options` only when the product has some. */
+export interface CheckoutItem {
+  product_id: number;
+  quantity: number;
+  options?: SelectedOptions;
+}
 
 /**
  * Typed client for the public storefront API.
@@ -57,6 +66,9 @@ function toParams(query: ProductQuery): Record<string, string> {
  * matter enough to re-read.
  */
 let categoryCache: Promise<Category[]> | null = null;
+
+/** Same idea for the campus list: admin-curated, changes rarely, read on demand. */
+let campusCache: Promise<Campus[]> | null = null;
 
 export const shop = {
   async home(): Promise<HomeFeed> {
@@ -170,16 +182,20 @@ export const shop = {
    * its own copy of the delivery charge to drift out of sync.
    */
   async checkoutPreview(payload: {
-    items: { product_id: number; quantity: number }[];
+    items: CheckoutItem[];
     delivery_latitude?: number | null;
     delivery_longitude?: number | null;
+    /** The saved address being delivered to, so a campus fee can apply. */
+    address_id?: number | null;
+    /** A campus chosen but not yet saved as an address. */
+    campus_id?: number | null;
   }): Promise<CheckoutPreview> {
     const { data } = await api.post<CheckoutPreview>("/shop/checkout/preview", payload);
     return data;
   },
 
   async placeOrder(payload: {
-    items: { product_id: number; quantity: number }[];
+    items: CheckoutItem[];
     delivery_address: string;
     customer_phone: string;
     payment_method: "lipa_namba" | "mobile_money";
@@ -187,6 +203,8 @@ export const shop = {
     /** The destination pin, when one has been dropped. Delivery is priced from it. */
     delivery_latitude?: number | null;
     delivery_longitude?: number | null;
+    address_id?: number | null;
+    campus_id?: number | null;
   }) {
     const { data } = await api.post("/shop/orders", payload);
     return data as { message: string; reference: string; order: Order };
@@ -223,6 +241,30 @@ export const shop = {
   },
 
   /* ---------------- delivery address book ---------------- */
+
+  /** Active campuses for "deliver to my campus". Public; cached per page session. */
+  async campuses(): Promise<Campus[]> {
+    if (campusCache) return campusCache;
+
+    campusCache = api
+      .get<{ campuses: Campus[] }>("/shop/campuses")
+      .then(({ data }) =>
+        (data.campuses ?? []).map((campus) => ({
+          ...campus,
+          // Laravel serialises decimals as strings.
+          delivery_fee:
+            campus.delivery_fee === null || campus.delivery_fee === undefined
+              ? null
+              : Number(campus.delivery_fee),
+        })),
+      )
+      .catch((error) => {
+        campusCache = null;
+        throw error;
+      });
+
+    return campusCache;
+  },
 
   async addresses(): Promise<Address[]> {
     const { data } = await api.get<{ addresses: Address[] }>("/shop/addresses");

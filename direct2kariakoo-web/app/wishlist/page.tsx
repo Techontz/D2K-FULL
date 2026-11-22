@@ -129,6 +129,7 @@ function toCard(product: Awaited<ReturnType<typeof shop.product>>["product"]): P
     rating: { average: product.rating.average, count: product.rating.count },
     stock: product.stock,
     in_stock: product.in_stock,
+    has_options: (product.options?.length ?? 0) > 0,
     category: product.category ?? undefined,
     subcategory: product.subcategory ?? undefined,
     vendor: product.vendor ? { id: product.vendor.id, name: product.vendor.name } : undefined,

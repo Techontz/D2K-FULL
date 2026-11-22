@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/format";
-import { useCart } from "@/lib/store/cart";
+import { keyOf, useCart } from "@/lib/store/cart";
+import { formatOptions } from "@/lib/options";
 import { useWishlist } from "@/lib/store/wishlist";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { Button, ButtonLink, EmptyState } from "@/components/ui/Primitives";
@@ -50,9 +51,13 @@ export default function CartPage() {
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <section className="space-y-3">
-            {cart.lines.map(({ product, quantity }) => (
+            {cart.lines.map((line) => {
+              const { product, quantity } = line;
+              const key = keyOf(line);
+              const chosen = formatOptions(line.options);
+              return (
               <article
-                key={product.id}
+                key={key}
                 className="flex gap-3 rounded-[var(--radius-md)] bg-[color:var(--color-surface)] p-3"
               >
                 <Link
@@ -69,6 +74,10 @@ export default function CartPage() {
                   <Link href={`/product?id=${product.id}`} prefetch={false} className="clamp-2 text-[14px] font-semibold hover:underline">
                     {product.name}
                   </Link>
+
+                  {chosen ? (
+                    <p className="mt-0.5 text-[12px] text-[color:var(--color-ink-muted)]">{chosen}</p>
+                  ) : null}
 
                   {product.vendor ? (
                     <p className="mt-0.5 text-[11px] text-[color:var(--color-ink-faint)]">
@@ -89,14 +98,14 @@ export default function CartPage() {
                       rather than being squeezed off the row. */}
                   <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
                     <div className="flex h-9 items-center rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)]">
-                      <StepButton label={t("common.decreaseQuantity")} onClick={() => cart.setQuantity(product.id, quantity - 1)}>
+                      <StepButton label={t("common.decreaseQuantity")} onClick={() => cart.setQuantity(key, quantity - 1)}>
                         −
                       </StepButton>
                       <span className="w-9 text-center text-[13px] font-bold tabular-nums">{quantity}</span>
                       <StepButton
                         label={t("common.increaseQuantity")}
                         disabled={quantity >= product.stock}
-                        onClick={() => cart.setQuantity(product.id, quantity + 1)}
+                        onClick={() => cart.setQuantity(key, quantity + 1)}
                       >
                         +
                       </StepButton>
@@ -105,14 +114,18 @@ export default function CartPage() {
                     <div className="flex items-center gap-3 text-[12px] font-semibold">
                       <button
                         type="button"
-                        onClick={() => { void wishlist.toggle(product.id); cart.remove(product.id); }}
+                        onClick={() => {
+                          // Saving a product that is already saved must not un-save it.
+                          if (!wishlist.has(product.id)) void wishlist.toggle(product.id);
+                          cart.remove(key);
+                        }}
                         className="text-[color:var(--color-action)] hover:underline"
                       >
                         Move to wishlist
                       </button>
                       <button
                         type="button"
-                        onClick={() => cart.remove(product.id)}
+                        onClick={() => cart.remove(key)}
                         className="text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-sale)] hover:underline"
                       >
                         {t("common.remove")}
@@ -121,7 +134,8 @@ export default function CartPage() {
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </section>
 
           {/* ---- summary ---- */}

@@ -45,6 +45,7 @@ class AttributeResource extends Resource
                         ->label('Input type')
                         ->options([
                             'select' => 'Choice list — seller picks from the values below',
+                            'multiselect' => 'Multiple choice — seller ticks every value the product comes in',
                             'text' => 'Free text — seller types a value',
                             'number' => 'Number',
                         ])
@@ -66,13 +67,21 @@ class AttributeResource extends Resource
                     Forms\Components\Toggle::make('is_active')
                         ->label('Available to sellers')
                         ->default(true),
+
+                    // The customer picks one of the product's values before
+                    // adding it to the cart. Same price and stock for every
+                    // value; the choice is recorded on the order line.
+                    Forms\Components\Toggle::make('is_variant')
+                        ->label('Customer chooses (size, colour…)')
+                        ->helperText('Shoppers must pick one of the values the seller ticked before adding to cart. Use with a choice list or multiple choice.')
+                        ->default(false),
                 ])
                 ->columns(2),
 
             Forms\Components\Section::make('Values')
                 ->description('The options a seller can choose from.')
                 // Only a choice list needs a fixed set of options.
-                ->visible(fn (Forms\Get $get) => $get('input_type') === 'select')
+                ->visible(fn (Forms\Get $get) => in_array($get('input_type'), ['select', 'multiselect'], true))
                 ->schema([
                     Forms\Components\Repeater::make('values')
                         ->relationship()
@@ -110,10 +119,15 @@ class AttributeResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'select' => 'Choice list',
+                        'multiselect' => 'Multiple choice',
                         'number' => 'Number',
                         default => 'Free text',
                     })
-                    ->color(fn (?string $state) => $state === 'select' ? 'info' : 'gray'),
+                    ->color(fn (?string $state) => in_array($state, ['select', 'multiselect'], true) ? 'info' : 'gray'),
+
+                Tables\Columns\IconColumn::make('is_variant')
+                    ->label('Customer chooses')
+                    ->boolean(),
 
                 TextColumn::make('values_count')
                     ->counts('values')

@@ -20,6 +20,9 @@ class FakeBackend {
 
   final List<String> requestedPaths = [];
 
+  /// The decoded JSON body of the last write to each path.
+  final Map<String, Map<String, dynamic>> sentBodies = {};
+
   ApiClient client() => ApiClient(
         baseUrl: 'http://test.local/api',
         client: MockClient(_handle),
@@ -28,6 +31,10 @@ class FakeBackend {
   Future<http.Response> _handle(http.Request request) async {
     final path = request.url.path.replaceFirst('/api', '');
     requestedPaths.add(path);
+    if (request.body.isNotEmpty) {
+      final decoded = jsonDecode(request.body);
+      if (decoded is Map<String, dynamic>) sentBodies[path] = decoded;
+    }
 
     if (failEverything) {
       return http.Response(
@@ -56,7 +63,11 @@ class FakeBackend {
       '/shop/addresses' => request.method == 'POST'
           ? {'address': _address}
           : {'addresses': [_address]},
-      '/shop/orders' => {'orders': [_order]},
+      '/shop/orders' => request.method == 'POST'
+          ? {'order': _order}
+          : {'orders': [_order]},
+      '/shop/campuses' => {'campuses': _campuses},
+      '/shop/products/3091' => {'product': _sizedProduct},
       '/shop/chat/threads' => {'threads': <Object>[]},
       '/shop/chat/unread' => {'unread': 0},
       '/me' => {'user': _user},
@@ -155,6 +166,61 @@ class FakeBackend {
     },
   ];
 
+  /// A product the shopper must choose a size and colour for.
+  static const _sizedProduct = {
+    'id': 3091,
+    'name': 'Canvas Sneakers',
+    'short_description': '',
+    'description': 'Everyday canvas sneakers.',
+    'image': '',
+    'images': <String>[],
+    'price': {
+      'currency': 'TZS',
+      'current': 30000,
+      'was': null,
+      'discount_percent': 0,
+    },
+    'stock': 20,
+    'in_stock': true,
+    'category': {'id': 3, 'name': 'Electronics'},
+    'subcategory': {'id': 12, 'name': 'Speakers'},
+    'vendor': _vendor,
+    'specifications': [
+      {'label': 'Material', 'value': 'Canvas'},
+    ],
+    'options': [
+      {
+        'id': 4,
+        'name': 'Shoe Size (EU)',
+        'values': ['40', '41', '42'],
+      },
+      {
+        'id': 2,
+        'name': 'Color',
+        'values': ['Black', 'White'],
+      },
+    ],
+    'rating': {'average': 0, 'count': 0, 'distribution': <Object>[]},
+    'reviews': <Object>[],
+  };
+
+  static const _campuses = [
+    {
+      'id': 1,
+      'name': 'University of Dar es Salaam (UDSM) – Mlimani',
+      'short_name': 'UDSM Mlimani',
+      'area': 'Ubungo',
+      'delivery_fee': null,
+    },
+    {
+      'id': 3,
+      'name': 'Ardhi University',
+      'short_name': null,
+      'area': 'Kinondoni',
+      'delivery_fee': 2000,
+    },
+  ];
+
   static const _home = {
     'hero': [
       {
@@ -215,6 +281,18 @@ class FakeBackend {
         'price': 45000,
         'total': 45000,
         'status': 'pending',
+        // Orders placed before options existed carry none.
+        'options': null,
+      },
+      {
+        'id': 2,
+        'product': {'id': 3091, 'name': 'Canvas Sneakers', 'image': ''},
+        'vendor': 'Kariakoo Electronics',
+        'quantity': 1,
+        'price': 30000,
+        'total': 30000,
+        'status': 'pending',
+        'options': {'Shoe Size (EU)': '42', 'Color': 'Black'},
       },
     ],
   };

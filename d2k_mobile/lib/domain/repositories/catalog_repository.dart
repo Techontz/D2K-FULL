@@ -106,8 +106,9 @@ class CatalogRepository {
       // A detailed record must not be replaced by a slimmer list entry.
       final existing = _byId[product.id];
       if (existing != null &&
-          existing.specifications.isNotEmpty &&
-          product.specifications.isEmpty) {
+          ((existing.specifications.isNotEmpty &&
+                  product.specifications.isEmpty) ||
+              (existing.options.isNotEmpty && product.options.isEmpty))) {
         continue;
       }
       _byId[product.id] = product;

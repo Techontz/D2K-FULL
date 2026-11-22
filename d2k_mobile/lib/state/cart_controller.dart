@@ -36,12 +36,20 @@ class CartController extends ChangeNotifier {
   int get itemCount =>
       _items.values.fold(0, (sum, item) => sum + item.quantity);
 
-  int quantityOf(Product product, {String? variantLabel}) {
-    final key = variantLabel == null
-        ? product.id
-        : '${product.id}::$variantLabel';
+  int quantityOf(
+    Product product, {
+    String? variantLabel,
+    Map<String, String> options = const {},
+  }) {
+    final key = CartItem.keyFor(product.id,
+        options: options, variantLabel: variantLabel);
     return _items[key]?.quantity ?? 0;
   }
+
+  /// Units of [product] across every line, whatever was chosen for each.
+  int totalQuantityOf(Product product) => _items.values
+      .where((item) => item.product.id == product.id)
+      .fold(0, (sum, item) => sum + item.quantity);
 
   Money get subtotal => _items.values
       .fold(Money.zero, (sum, item) => sum + item.lineTotal);
@@ -58,6 +66,27 @@ class CartController extends ChangeNotifier {
   /// Goods only. Delivery is added by the backend once it has been quoted.
   Money get total => subtotal;
 
+  /// The first line still missing a choice its product requires, or null.
+  ///
+  /// Only lines whose product detail has been loaded can be checked here; the
+  /// backend validates every line again when the order is placed.
+  ({CartItem item, ProductOption option})? firstMissingChoice() {
+    for (final item in _items.values) {
+      // The cart may hold the slimmer list record; the detail record, if it
+      // has been fetched since, is the one that knows the options.
+      final known = _catalog.productById(item.product.id)?.options;
+      final options =
+          (known != null && known.isNotEmpty) ? known : item.product.options;
+      for (final option in options) {
+        final chosen = item.options[option.name];
+        if (chosen == null || !option.values.contains(chosen)) {
+          return (item: item, option: option);
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsKey);
@@ -71,6 +100,8 @@ class CartController extends ChangeNotifier {
           product: product,
           quantity: entry['qty'] as int,
           variantLabel: entry['variant'] as String?,
+          // Carts saved before options existed simply have none.
+          options: parseChosenOptions(entry['options']),
         );
         _items[item.key] = item;
       }
@@ -91,18 +122,39 @@ class CartController extends ChangeNotifier {
             'id': item.product.id,
             'qty': item.quantity,
             'variant': item.variantLabel,
+            if (item.options.isNotEmpty) 'options': item.options,
           }
       ]),
     );
   }
 
-  void add(Product product, {int quantity = 1, String? variantLabel}) {
-    final key =
-        variantLabel == null ? product.id : '${product.id}::$variantLabel';
+  /// Adds [quantity] units. The same product with the same [options] grows
+  /// one line; different options make a separate line.
+  void add(
+    Product product, {
+    int quantity = 1,
+    String? variantLabel,
+    Map<String, String> options = const {},
+  }) {
+    final chosen = Map<String, String>.unmodifiable(options);
+    if (chosen.isNotEmpty) {
+      // A line of this product with no choice at all (added from a product
+      // card, or saved before options existed) is superseded by this one.
+      _items.removeWhere((_, item) =>
+          item.product.id == product.id &&
+          item.options.isEmpty &&
+          item.variantLabel == null);
+    }
+    final key = CartItem.keyFor(product.id,
+        options: chosen, variantLabel: variantLabel);
     final existing = _items[key];
     _items[key] = existing == null
         ? CartItem(
-            product: product, quantity: quantity, variantLabel: variantLabel)
+            product: product,
+            quantity: quantity,
+            variantLabel: variantLabel,
+            options: chosen,
+          )
         : existing.copyWith(quantity: existing.quantity + quantity);
     notifyListeners();
     _persist();
@@ -146,12 +198,18 @@ class CartController extends ChangeNotifier {
     // Pay on delivery has been withdrawn; the shopper pays the seller on
     // that seller's own Lipa Namba.
     String paymentMethod = 'lipa_namba',
+    String? addressId,
   }) async {
     final order = await shop.placeOrder(
       items: [
         for (final item in items)
-          OrderLineRequest(productId: item.product.id, quantity: item.quantity),
+          OrderLineRequest(
+            productId: item.product.id,
+            quantity: item.quantity,
+            options: item.options,
+          ),
       ],
+      addressId: addressId,
       deliveryAddress: address,
       customerPhone: phone,
       paymentMethod: paymentMethod,

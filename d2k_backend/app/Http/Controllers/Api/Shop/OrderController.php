@@ -7,7 +7,9 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\PaymentSetting;
+use App\Services\Delivery\DeliveryDestination;
 use App\Services\Delivery\DeliveryQuoter;
+use App\Support\ProductOptions;
 use App\Support\LipaNamba;
 use App\Support\Media;
 use Illuminate\Http\Request;
@@ -48,8 +50,13 @@ class OrderController extends Controller
             'items'                => 'required|array|min:1|max:50',
             'items.*.product_id'   => 'required|integer|exists:products,id',
             'items.*.quantity'     => 'required|integer|min:1|max:99',
-            'delivery_address'     => 'required|string|max:500',
-            'customer_phone'       => 'required|string|max:40',
+            // {"Size": "M"} — validated against the product below.
+            'items.*.options'      => 'sometimes|nullable',
+            // Either typed in full, or taken from a saved address.
+            'address_id'           => 'nullable|integer',
+            'campus_id'            => 'nullable|integer',
+            'delivery_address'     => 'required_without:address_id|nullable|string|max:500',
+            'customer_phone'       => 'required_without:address_id|nullable|string|max:40',
             // Pay on delivery is gone: sellers were shipping goods against a
             // promise and absorbing every refusal at the door. Payment is now
             // made to the seller's own Lipa Namba.
@@ -64,6 +71,34 @@ class OrderController extends Controller
 
         $user      = $request->user();
         $reference = $this->newReference();
+
+        $destination = DeliveryDestination::fromInput($data, $user);
+
+        if (! empty($data['address_id']) && ! $destination->address) {
+            return response()->json([
+                'message' => 'That delivery address was not found.',
+                'errors'  => ['address_id' => ['That delivery address was not found.']],
+            ], 422);
+        }
+
+        // A saved address fills in whatever the client did not type.
+        if ($destination->address) {
+            $data['delivery_address'] = ($data['delivery_address'] ?? null) ?: $this->addressLine($destination->address);
+            $data['customer_phone']   = ($data['customer_phone'] ?? null) ?: $destination->address->phone;
+        }
+
+        // Validated up front, before anything is locked or written, so a
+        // missing size is a clean 422 keyed on items.N.options.<Name>.
+        $chosenOptions = [];
+        $optionProducts = Product::whereIn('id', collect($data['items'])->pluck('product_id'))->get()->keyBy('id');
+        foreach ($data['items'] as $index => $item) {
+            $chosenOptions[$index] = ProductOptions::validate(
+                $optionProducts->get($item['product_id']),
+                $item['options'] ?? null,
+                "items.{$index}.options",
+            );
+        }
+        $storeOptions = ProductOptions::ordersSupportOptions();
 
         // One recipient for the whole basket. Resolved before the transaction
         // so every line of the order records the same thing, even if an
@@ -89,11 +124,11 @@ class OrderController extends Controller
         ], fn ($value) => $value !== null);
 
         try {
-            $result = DB::transaction(function () use ($data, $user, $reference, $snapshot) {
+            $result = DB::transaction(function () use ($data, $user, $reference, $snapshot, $chosenOptions, $storeOptions) {
                 $subtotal = 0;
                 $lines    = [];
 
-                foreach ($data['items'] as $item) {
+                foreach ($data['items'] as $index => $item) {
                     /** @var Product $product */
                     $product = Product::lockForUpdate()->find($item['product_id']);
 
@@ -143,6 +178,10 @@ class OrderController extends Controller
                         $line[$column] = $value;
                     }
 
+                    if ($storeOptions && $chosenOptions[$index] !== null) {
+                        $line['options'] = $chosenOptions[$index];
+                    }
+
                     $lines[] = Order::create($line);
 
                     // Reserve the stock that was just sold.
@@ -164,10 +203,10 @@ class OrderController extends Controller
         // A pending quote is stored as NULL — never as 0, which would read as
         // "delivery is free", and never as a placeholder figure the rider
         // would then have to argue with.
-        $quote = $this->quoter->quote(
-            isset($data['delivery_latitude']) ? (float) $data['delivery_latitude'] : null,
-            isset($data['delivery_longitude']) ? (float) $data['delivery_longitude'] : null,
-        );
+        //
+        // A campus with a flat fee set by an administrator is charged that
+        // fee; anywhere else is priced by distance as before.
+        $quote = $destination->quote($this->quoter);
 
         $first = $result['lines'][0];
         $first->update(['delivery_fee' => $quote->amount]);
@@ -245,6 +284,18 @@ class OrderController extends Controller
 
     /* ---------------------------------------------------------------- */
 
+    /** A saved address as one line for the order record, campus first. */
+    private function addressLine(\App\Models\Address $address): string
+    {
+        $line = $address->formatted;
+
+        if ($address->campus_id && $address->campus && ! str_contains($line, $address->campus->name)) {
+            $line = $address->campus->name . ', ' . $line;
+        }
+
+        return mb_substr($line, 0, 500);
+    }
+
     private function newReference(): string
     {
         // Short, unambiguous and safe to read aloud: no O/0 or I/1 confusion.
@@ -308,6 +359,8 @@ class OrderController extends Controller
                     'image' => Media::url(optional($line->product->images->first())->image),
                 ] : null,
                 'vendor'   => $line->vendor?->business_name,
+                // {"Size": "M"} or null.
+                'options'  => $line->options,
                 'quantity' => (int) $line->quantity,
                 'price'    => (float) $line->price,
                 'total'    => (float) $line->total,

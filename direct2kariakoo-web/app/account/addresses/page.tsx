@@ -7,6 +7,7 @@ import type { Address, AddressInput } from "@/lib/types";
 import { useAuth } from "@/lib/store/auth";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { AddressForm, TZ_REGIONS } from "@/components/account/AddressForm";
+import { campusLabel } from "@/components/location/CampusPicker";
 import { Button, EmptyState, Skeleton } from "@/components/ui/Primitives";
 import { useT } from "@/lib/i18n";
 
@@ -167,6 +168,11 @@ function AddressesContent() {
             >
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <p className="min-w-0 flex-1 clamp-1 text-[15px] font-extrabold">{address.full_name}</p>
+                {address.campus ? (
+                  <span className="shrink-0 rounded-full bg-[color:var(--color-success-soft)] px-2 py-[3px] text-[10px] font-black uppercase tracking-wide text-[color:var(--color-success)]">
+                    🎓 {campusLabel(address.campus)}
+                  </span>
+                ) : null}
                 {address.is_default ? (
                   <span className="shrink-0 rounded-full bg-[color:var(--color-action)] px-2 py-[3px] text-[10px] font-black uppercase tracking-wide text-white">
                     {t("address.default")}

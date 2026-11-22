@@ -8,6 +8,28 @@ export interface SellerAttribute {
   type: "select" | "multiselect" | "text" | "number";
   unit: string | null;
   options: string[];
+  /** The customer picks one of this product's values (size, colour…). */
+  is_variant?: boolean;
+}
+
+/**
+ * A seller's value for one attribute: a plain string, or — for an attribute
+ * customers choose from (`is_variant`) — every value this product offers.
+ */
+export type AttributeValue = string | string[];
+
+/**
+ * Appends attributes to a multipart body. Lists go as `attributes[4][]=M`,
+ * which PHP reads back as an array; blanks and empty lists are left out.
+ */
+function appendAttributes(form: FormData, attributes: Record<number, AttributeValue> | undefined) {
+  Object.entries(attributes ?? {}).forEach(([id, value]) => {
+    if (Array.isArray(value)) {
+      value.filter(Boolean).forEach((item) => form.append(`attributes[${id}][]`, item));
+    } else if (value) {
+      form.append(`attributes[${id}]`, value);
+    }
+  });
 }
 
 /** Typed client for the vendor portal API (`/api/shop/vendor/*`). */
@@ -49,6 +71,8 @@ export interface VendorOrder {
   customer: { name: string; phone: string | null };
   address: string | null;
   product: { id: number; name: string; image: string | null } | null;
+  /** The size/colour etc. the customer chose, e.g. `{ Size: "M" }`. */
+  options?: Record<string, string> | null;
 }
 
 export interface VendorDashboard {
@@ -109,7 +133,7 @@ export const vendorApi = {
     stock: number;
     images: File[];
     /** Structured properties keyed by attribute id. */
-    attributes?: Record<number, string>;
+    attributes?: Record<number, AttributeValue>;
   }) {
     const form = new FormData();
     form.append("name", fields.name);
@@ -124,9 +148,7 @@ export const vendorApi = {
     // one shoppers see on cards.
     fields.images.forEach((file) => form.append("images[]", file));
 
-    Object.entries(fields.attributes ?? {}).forEach(([id, value]) => {
-      if (value) form.append(`attributes[${id}]`, value);
-    });
+    appendAttributes(form, fields.attributes);
 
     const { data } = await api.post("/products", form, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -151,12 +173,17 @@ export const vendorApi = {
       stock: number;
       images: File[];
       remove_images: boolean;
+      /**
+       * The complete set: the backend replaces every attribute value on
+       * update, so anything left out here is deleted.
+       */
+      attributes: Record<number, AttributeValue>;
     }>
   ) {
     const form = new FormData();
 
     for (const [key, value] of Object.entries(fields)) {
-      if (value === undefined || key === "images") continue;
+      if (value === undefined || key === "images" || key === "attributes") continue;
       if (key === "remove_images") {
         if (value) form.append("remove_images", "true");
         continue;
@@ -165,6 +192,7 @@ export const vendorApi = {
     }
 
     (fields.images ?? []).forEach((file) => form.append("images[]", file));
+    appendAttributes(form, fields.attributes);
 
     const { data } = await api.post(`/products/${id}`, form, {
       headers: { "Content-Type": "multipart/form-data" },

@@ -7,6 +7,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import shop from "@/lib/shop";
 import { useAuth } from "@/lib/store/auth";
 import type { Order } from "@/lib/types";
+import { formatOptions } from "@/lib/options";
 import { SiteChrome } from "@/components/layout/SiteChrome";
 import { Button, ButtonLink, EmptyState, Skeleton, Tag } from "@/components/ui/Primitives";
 import { useT } from "@/lib/i18n";
@@ -141,6 +142,21 @@ function OrdersContent() {
                   </div>
                 ))}
               </div>
+
+              {/* Sizes and colours are easy to forget by the time a parcel
+                  arrives, so each line that had a choice says what it was. */}
+              {order.items.some((item) => formatOptions(item.options)) ? (
+                <ul className="mt-2 space-y-0.5">
+                  {order.items
+                    .filter((item) => formatOptions(item.options))
+                    .map((item) => (
+                      <li key={item.id} className="clamp-1 text-[12px]">
+                        <span className="font-semibold">{item.product?.name ?? "—"}</span>
+                        <span className="text-[color:var(--color-ink-muted)]"> — {formatOptions(item.options)}</span>
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
 
               {order.delivery_address ? (
                 <p className="clamp-2 mt-3 text-[12px] text-[color:var(--color-ink-muted)]">

@@ -4,7 +4,9 @@ namespace App\Services\Checkout;
 
 use App\Models\PaymentSetting;
 use App\Models\Product;
+use App\Services\Delivery\DeliveryDestination;
 use App\Services\Delivery\DeliveryQuoter;
+use App\Support\ProductOptions;
 
 /**
  * Turns a basket into what the customer actually has to act on: one amount,
@@ -29,12 +31,19 @@ class CheckoutBuilder
     /**
      * Price and group a basket.
      *
-     * `$items` is the validated `[['product_id' => n, 'quantity' => n], …]`
-     * shape the storefront posts. The destination pin is optional: without it
-     * delivery is quoted as pending rather than assumed free.
+     * `$items` is the validated `[['product_id' => n, 'quantity' => n,
+     * 'options' => {...}?], …]` shape the storefront posts. Each line's options
+     * are validated against the product (422 when a choice is missing or
+     * invalid). The destination pin is optional: without it delivery is quoted
+     * as pending rather than assumed free. A destination that resolves to a
+     * campus with a flat fee is priced at that fee.
      */
-    public function build(array $items, ?float $latitude = null, ?float $longitude = null): array
-    {
+    public function build(
+        array $items,
+        ?float $latitude = null,
+        ?float $longitude = null,
+        ?DeliveryDestination $destination = null,
+    ): array {
         $products = Product::with('vendor')
             ->whereIn('id', collect($items)->pluck('product_id')->all())
             ->get()
@@ -44,13 +53,15 @@ class CheckoutBuilder
         $subtotal = 0.0;
         $missing  = [];
 
-        foreach ($items as $item) {
+        foreach ($items as $index => $item) {
             $product = $products->get($item['product_id']);
 
             if (! $product) {
                 $missing[] = (int) $item['product_id'];
                 continue;
             }
+
+            $options = ProductOptions::validate($product, $item['options'] ?? null, "items.{$index}.options");
 
             $quantity  = (int) $item['quantity'];
             $lineTotal = (float) $product->new_price * $quantity;
@@ -68,6 +79,7 @@ class CheckoutBuilder
             $groups[$vendorId]['items'][] = [
                 'product_id' => $product->id,
                 'name'       => $product->name,
+                'options'    => $options,
                 'quantity'   => $quantity,
                 'price'      => (float) $product->new_price,
                 'total'      => $lineTotal,
@@ -76,7 +88,9 @@ class CheckoutBuilder
             $groups[$vendorId]['subtotal'] += $lineTotal;
         }
 
-        $delivery  = $this->quoter->quote($latitude, $longitude);
+        $delivery  = $destination
+            ? $destination->quote($this->quoter)
+            : $this->quoter->quote($latitude, $longitude);
         $recipient = PaymentSetting::current();
 
         $vendorGroups = array_values(array_map(
@@ -105,6 +119,10 @@ class CheckoutBuilder
 
             // The fuller picture: whether it has been quoted, and from how far.
             'delivery' => $delivery->toArray(),
+
+            // The campus being delivered to, when there is one. A non-null
+            // delivery_fee here is the flat campus rate used above.
+            'campus'   => $destination?->campusPayload(),
 
             // Goods plus whatever delivery has been settled at. While delivery
             // is pending this is the goods total and the storefront says as

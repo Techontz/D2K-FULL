@@ -146,6 +146,8 @@ class AddressBookTest extends TestCase
 
         $this->postJson('/api/shop/addresses', ['full_name' => 'No details'])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['phone', 'region', 'city']);
+            ->assertJsonValidationErrors(['phone', 'city'])
+            // Region is optional: the mobile app's address form has none.
+            ->assertJsonMissingValidationErrors(['region']);
     }
 }

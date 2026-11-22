@@ -9,7 +9,7 @@ import type { Category, ProductDetail } from "@/lib/types";
 import { Button } from "@/components/ui/Primitives";
 import { useT } from "@/lib/i18n";
 import { ProductImagePicker, type PickedImage } from "./ProductImagePicker";
-import type { SellerAttribute } from "@/lib/vendor";
+import type { AttributeValue, SellerAttribute } from "@/lib/vendor";
 
 /**
  * Shared create/edit form for a vendor's product.
@@ -44,7 +44,10 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
 
   // Admin-defined properties for the chosen category, and the seller's values.
   const [attributes, setAttributes] = useState<SellerAttribute[]>([]);
-  const [attributeValues, setAttributeValues] = useState<Record<number, string>>({});
+  const [attributeValues, setAttributeValues] = useState<Record<number, AttributeValue>>({});
+  // Variant attributes the seller has interacted with. Only those must end up
+  // with at least one value; an untouched one is simply not offered.
+  const [touchedVariants, setTouchedVariants] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     shop.categories().then(setCategories).catch(() => setCategories([]));
@@ -57,10 +60,26 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
     let cancelled = false;
     vendorApi
       .attributes(form.category_id)
-      .then((list) => { if (!cancelled) setAttributes(list); })
+      .then((list) => {
+        if (cancelled) return;
+        setAttributes(list);
+        // On edit, start from what the product already has. Values the seller
+        // has already changed in this session are left alone.
+        if (product) {
+          setAttributeValues((current) => {
+            const next = { ...current };
+            for (const attribute of list) {
+              if (next[attribute.id] !== undefined) continue;
+              const stored = storedValue(product, attribute);
+              if (stored !== undefined) next[attribute.id] = stored;
+            }
+            return next;
+          });
+        }
+      })
       .catch(() => { if (!cancelled) setAttributes([]); });
     return () => { cancelled = true; };
-  }, [form.category_id]);
+  }, [form.category_id, product]);
 
   const subcategories =
     categories.find((category) => category.id === form.category_id)?.subcategories ?? [];
@@ -79,6 +98,26 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
       return;
     }
 
+    const emptyVariant = attributes.find(
+      (attribute) =>
+        attribute.is_variant &&
+        touchedVariants.has(attribute.id) &&
+        asList(attributeValues[attribute.id]).length === 0,
+    );
+    if (emptyVariant) {
+      setError(t("productForm.variantRequired", { name: emptyVariant.name }));
+      return;
+    }
+
+    // Only attributes of the current category are sent, so switching
+    // category does not carry over values that no longer apply.
+    const attributesToSend: Record<number, AttributeValue> = {};
+    for (const attribute of attributes) {
+      const value = attributeValues[attribute.id];
+      if (value === undefined) continue;
+      attributesToSend[attribute.id] = attribute.is_variant ? asList(value) : asText(value);
+    }
+
     setSaving(true);
 
     try {
@@ -93,6 +132,9 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
           stock: form.stock,
           images: images.length ? images.map((image) => image.file) : undefined,
           remove_images: replaceExisting,
+          // The backend rewrites every attribute on update, so the full set
+          // is always sent — omitting it used to wipe the product's specs.
+          attributes: attributesToSend,
         });
       } else {
         await vendorApi.createProduct({
@@ -105,7 +147,7 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
           old_price: form.old_price || undefined,
           stock: form.stock,
           images: images.map((image) => image.file),
-          attributes: attributeValues,
+          attributes: attributesToSend,
         });
       }
 
@@ -239,7 +281,53 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
             </p>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {attributes.map((attribute) => (
+              {attributes.map((attribute) =>
+                attribute.is_variant && attribute.options.length > 0 ? (
+                  // The seller ticks every value the product comes in; the
+                  // customer then picks one of them.
+                  <fieldset key={attribute.id} className="block sm:col-span-2">
+                    <legend className="mb-1 block text-[12px] font-semibold text-[color:var(--color-ink-muted)]">
+                      {attribute.name}
+                      {attribute.unit ? ` (${attribute.unit})` : ""}
+                    </legend>
+                    <div className="flex flex-wrap gap-2">
+                      {attribute.options.map((option) => {
+                        const chosen = asList(attributeValues[attribute.id]);
+                        const active = chosen.includes(option);
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => {
+                              setTouchedVariants((current) => new Set(current).add(attribute.id));
+                              setAttributeValues((current) => {
+                                const list = asList(current[attribute.id]);
+                                return {
+                                  ...current,
+                                  [attribute.id]: active
+                                    ? list.filter((value) => value !== option)
+                                    // Kept in the administrator's order, not click order.
+                                    : attribute.options.filter((value) => value === option || list.includes(value)),
+                                };
+                              });
+                            }}
+                            className={`min-h-[36px] min-w-[44px] rounded-[var(--radius-pill)] border px-3.5 text-[13px] font-bold transition-colors ${
+                              active
+                                ? "border-[color:var(--color-action)] bg-[color:var(--color-action)] text-white"
+                                : "border-[color:var(--color-line-strong)] bg-[color:var(--color-surface)] text-[color:var(--color-ink)] hover:border-[color:var(--color-action)]"
+                            }`}
+                          >
+                            {active ? "✓ " : ""}{option}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="mt-1 block text-[11px] font-semibold text-[color:var(--color-action)]">
+                      {t("productForm.variantHint")}
+                    </span>
+                  </fieldset>
+                ) : (
                 <label key={attribute.id} className="block">
                   <span className="mb-1 block text-[12px] font-semibold text-[color:var(--color-ink-muted)]">
                     {attribute.name}
@@ -248,7 +336,7 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
 
                   {attribute.options.length > 0 ? (
                     <select
-                      value={attributeValues[attribute.id] ?? ""}
+                      value={asText(attributeValues[attribute.id])}
                       onChange={(event) =>
                         setAttributeValues((current) => ({ ...current, [attribute.id]: event.target.value }))
                       }
@@ -258,11 +346,18 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
                       {attribute.options.map((option) => (
                         <option key={option} value={option}>{option}</option>
                       ))}
+                      {/* A stored value no longer in the list is kept, not silently dropped. */}
+                      {asText(attributeValues[attribute.id]) &&
+                      !attribute.options.includes(asText(attributeValues[attribute.id])) ? (
+                        <option value={asText(attributeValues[attribute.id])}>
+                          {asText(attributeValues[attribute.id])}
+                        </option>
+                      ) : null}
                     </select>
                   ) : (
                     <input
                       type={attribute.type === "number" ? "number" : "text"}
-                      value={attributeValues[attribute.id] ?? ""}
+                      value={asText(attributeValues[attribute.id])}
                       onChange={(event) =>
                         setAttributeValues((current) => ({ ...current, [attribute.id]: event.target.value }))
                       }
@@ -270,8 +365,15 @@ export function ProductForm({ product }: { product?: ProductDetail }) {
                       className="h-11 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-line-strong)] px-3 text-sm outline-none focus:border-[color:var(--color-action)]"
                     />
                   )}
+
+                  {attribute.is_variant ? (
+                    <span className="mt-1 block text-[11px] font-semibold text-[color:var(--color-action)]">
+                      {t("productForm.variantHint")}
+                    </span>
+                  ) : null}
                 </label>
-              ))}
+                ),
+              )}
             </div>
           </section>
         ) : null}
@@ -365,3 +467,52 @@ function SelectField({
 }
 
 export default ProductForm;
+
+/* ---- attribute value helpers ---- */
+
+/** "M, L" / '["M","L"]' / ["M","L"] → ["M","L"]. Mirrors ProductOptions::splitValues. */
+function splitStored(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((v) => String(v).trim()).filter(Boolean);
+  const text = typeof raw === "string" ? raw.trim() : "";
+  if (!text) return [];
+  if (text.startsWith("[")) {
+    try {
+      const decoded: unknown = JSON.parse(text);
+      if (Array.isArray(decoded)) return splitStored(decoded);
+    } catch {
+      /* not JSON — fall through to the separators */
+    }
+  }
+  return text.split(/[,;|\r\n]+/).map((v) => v.trim()).filter(Boolean);
+}
+
+function asList(value: AttributeValue | undefined): string[] {
+  return splitStored(value ?? "");
+}
+
+function asText(value: AttributeValue | undefined): string {
+  return Array.isArray(value) ? value.join(", ") : value ?? "";
+}
+
+/**
+ * What the product being edited already holds for an attribute.
+ *
+ * Variant attributes come back as `options[]` (an array, matched by id); for
+ * older data, or a variant attribute the API still lists as a specification,
+ * the comma-separated spec value is split instead. Plain attributes come from
+ * the specification with the same label.
+ */
+function storedValue(product: ProductDetail, attribute: SellerAttribute): AttributeValue | undefined {
+  const option = product.options?.find((item) => item.id === attribute.id);
+  const spec = product.specifications.find((item) => item.label === attribute.name);
+
+  if (attribute.is_variant) {
+    if (option) return splitStored(option.values);
+    if (spec) return splitStored(spec.value);
+    return undefined;
+  }
+
+  if (spec) return spec.value;
+  if (option) return option.values.join(", ");
+  return undefined;
+}

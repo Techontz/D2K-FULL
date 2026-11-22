@@ -6,6 +6,8 @@ import '../core/theme/app_metrics.dart';
 import '../core/theme/app_typography.dart';
 import '../domain/models/commerce.dart';
 import '../domain/models/product.dart';
+import '../domain/repositories/catalog_repository.dart';
+import '../screens/product/product_detail_screen.dart';
 import '../state/cart_controller.dart';
 
 /// The white "+" plate on a product image. Once the product is in the cart it
@@ -18,6 +20,18 @@ class AddToCartButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartController>();
+
+    // A product with sizes/colours cannot be added without a choice, so the
+    // "+" opens the product page where the shopper picks one.
+    final detail = _cachedDetailOf(context, product.id);
+    if (product.hasOptions || (detail?.hasOptions ?? false)) {
+      return _AddPlate(
+        key: const ValueKey('choose'),
+        onTap: () => ProductDetailScreen.open(context, detail ?? product),
+        enabled: product.inStock,
+      );
+    }
+
     final quantity = cart.quantityOf(product);
 
     return AnimatedSwitcher(
@@ -45,6 +59,14 @@ class AddToCartButton extends StatelessWidget {
               },
             ),
     );
+  }
+}
+
+Product? _cachedDetailOf(BuildContext context, String id) {
+  try {
+    return context.read<CatalogRepository>().productById(id);
+  } on ProviderNotFoundException {
+    return null;
   }
 }
 

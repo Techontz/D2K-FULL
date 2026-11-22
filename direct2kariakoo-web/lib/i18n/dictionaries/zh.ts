@@ -534,6 +534,8 @@ export const zh: Dictionary = {
     pricing: "价格与库存",
     attributes: "规格参数",
     attributesHint: "买家可用于筛选的参数。不适用的可留空。",
+    variantHint: "顾客将选择其中一项",
+    variantRequired: "请至少选择一个{name}",
     name: "商品名称",
     shortDescription: "简短描述",
     shortHint: "显示在搜索结果中的一句话。",
@@ -559,6 +561,29 @@ export const zh: Dictionary = {
     saved: "商品已保存",
     addAnother: "再添加一件商品",
     backToProducts: "返回我的商品",
+  },
+
+  options: {
+    choose: "请选择{name}",
+    chooseOnProduct: "请为{name}选择选项",
+  },
+
+  campus: {
+    deliverToCampus: "送到我的校园",
+    deliverToCampusHint: "达累斯萨拉姆的大学或学院宿舍",
+    otherAddress: "家庭或其他地址",
+    choose: "选择你的校园",
+    search: "搜索校园",
+    noResults: "没有与“{query}”匹配的校园",
+    loading: "正在加载校园…",
+    loadFailed: "无法加载校园列表，请重试。",
+    room: "宿舍楼、楼栋和房间",
+    roomPlaceholder: "例如 Hall 5, Block B, Room 12",
+    errCampus: "请选择你的校园",
+    errRoom: "请填写宿舍楼、楼栋和房间",
+    fee: "校园配送 {amount}",
+    badge: "校园",
+    savedNote: "已保存到你的地址簿。",
   },
 
   footer: {

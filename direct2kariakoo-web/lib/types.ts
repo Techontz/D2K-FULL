@@ -26,6 +26,11 @@ export interface ProductCard {
   rating: Rating;
   stock: number;
   in_stock: boolean;
+  /**
+   * True when the shopper must pick a size/colour first. Optional: listing
+   * payloads that predate product options simply omit it.
+   */
+  has_options?: boolean;
   category?: Ref;
   subcategory?: Ref;
   vendor?: Ref;
@@ -40,6 +45,22 @@ export interface Specification {
   label: string;
   value: string;
 }
+
+/**
+ * Something the customer chooses one value of (size, colour…). Same price and
+ * stock for every value — this is a choice, not a separate SKU.
+ */
+export interface ProductOption {
+  id: number;
+  name: string;
+  values: string[];
+}
+
+/**
+ * The chosen options, keyed by `ProductOption.name`, e.g. `{ Size: "M" }`.
+ * `null`, absent or `{}` all mean "no options".
+ */
+export type SelectedOptions = Record<string, string>;
 
 export interface Review {
   id: number;
@@ -115,6 +136,8 @@ export interface ProductDetail {
   subcategory: Ref | null;
   vendor: ProductVendor | null;
   specifications: Specification[];
+  /** Absent on an API that predates product options. */
+  options?: ProductOption[];
   rating: Rating & {
     distribution: { star: number; count: number; percent: number }[];
   };
@@ -221,6 +244,8 @@ export interface ProductListing {
 export interface CartLine {
   product: ProductCard;
   quantity: number;
+  /** Absent on carts saved before product options existed. */
+  options?: SelectedOptions | null;
 }
 
 export interface OrderItem {
@@ -231,6 +256,7 @@ export interface OrderItem {
   price: number;
   total: number;
   status: string;
+  options?: SelectedOptions | null;
 }
 
 /**
@@ -286,7 +312,14 @@ export interface CheckoutVendorGroup {
   vendor_id: number | null;
   vendor_name: string;
   subtotal: number;
-  items: { product_id: number; name: string; quantity: number; price: number; total: number }[];
+  items: {
+    product_id: number;
+    name: string;
+    quantity: number;
+    price: number;
+    total: number;
+    options?: SelectedOptions | null;
+  }[];
 }
 
 /**
@@ -348,6 +381,16 @@ export interface AuthUser {
   } | null;
 }
 
+/** A Dar es Salaam university/college the courier delivers to. */
+export interface Campus {
+  id: number;
+  name: string;
+  short_name: string | null;
+  area: string | null;
+  /** Null means the normal distance-based delivery pricing applies. */
+  delivery_fee: number | null;
+}
+
 /** A saved delivery address. Mirrors Api\Shop\AddressController::present(). */
 export interface Address {
   id: number;
@@ -363,7 +406,12 @@ export interface Address {
   is_default: boolean;
   /** Courier-readable single line, composed by the backend. */
   formatted: string;
+  /** Set when this is a campus delivery; `details` then holds hostel/block/room. */
+  campus?: { id: number; name: string; short_name: string | null } | null;
 }
 
 /** The writable subset of an address. */
-export type AddressInput = Omit<Address, "id" | "formatted">;
+export type AddressInput = Omit<Address, "id" | "formatted" | "campus"> & {
+  /** Null clears a campus from an address that had one. */
+  campus_id?: number | null;
+};

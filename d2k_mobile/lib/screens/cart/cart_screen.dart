@@ -20,6 +20,7 @@ import '../../widgets/product_card.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/states.dart';
 import '../../widgets/toast.dart';
+import '../product/product_detail_screen.dart';
 import '../shell/app_shell.dart';
 
 /// Cart tab — empty state with the "Start Shopping" CTA and a bestsellers rail,
@@ -305,9 +306,15 @@ class _CartRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.productTitle,
                   ),
-                  if (item.variantLabel != null) ...[
+                  // "Size: M · Color: Red" — what will actually be shipped.
+                  if (item.optionsLabel != null) ...[
                     const SizedBox(height: 3),
-                    Text(item.variantLabel!, style: AppTypography.metaMuted),
+                    Text(
+                      item.optionsLabel!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.metaMuted,
+                    ),
                   ],
                   const SizedBox(height: 6),
                   Text(
@@ -579,11 +586,28 @@ class _CheckoutBar extends StatelessWidget {
                     return;
                   }
 
+                  // A line added before its size/colour was known (e.g. from a
+                  // product card) is sent back to the product page to choose,
+                  // rather than letting the server refuse the whole order.
+                  final missing = cart.firstMissingChoice();
+                  if (missing != null) {
+                    D2KToast.show(
+                      context,
+                      '${strings.chooseOption(missing.option.name)} · '
+                      '${missing.item.product.title}',
+                      icon: Icons.tune,
+                    );
+                    await ProductDetailScreen.open(
+                        context, missing.item.product);
+                    return;
+                  }
+
                   try {
                     final order = await context.read<CartController>().checkout(
                           shop: context.read<RemoteShopSource>(),
                           address: address,
                           phone: phone,
+                          addressId: location.defaultAddress?.id,
                         );
                     if (!context.mounted) return;
                     D2KToast.show(

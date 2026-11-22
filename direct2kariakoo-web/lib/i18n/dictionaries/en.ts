@@ -544,6 +544,8 @@ export const en = {
     pricing: "Pricing and stock",
     attributes: "Specifications",
     attributesHint: "Structured details shoppers can filter on. Leave blank what does not apply.",
+    variantHint: "Customers will choose one",
+    variantRequired: "Choose at least one {name}",
     name: "Product name",
     shortDescription: "Short description",
     shortHint: "One line shoppers see in search results.",
@@ -569,6 +571,29 @@ export const en = {
     saved: "Product saved",
     addAnother: "Add another product",
     backToProducts: "Back to my products",
+  },
+
+  options: {
+    choose: "Choose {name}",
+    chooseOnProduct: "Choose options for {name}",
+  },
+
+  campus: {
+    deliverToCampus: "Deliver to my campus",
+    deliverToCampusHint: "University or college hostel in Dar es Salaam",
+    otherAddress: "Home or other address",
+    choose: "Choose your campus",
+    search: "Search campuses",
+    noResults: "No campus matches “{query}”",
+    loading: "Loading campuses…",
+    loadFailed: "Could not load campuses. Try again.",
+    room: "Hostel, block and room",
+    roomPlaceholder: "e.g. Hall 5, Block B, Room 12",
+    errCampus: "Choose your campus",
+    errRoom: "Enter your hostel, block and room",
+    fee: "Campus delivery {amount}",
+    badge: "Campus",
+    savedNote: "Saved to your address book for next time.",
   },
 
   footer: {

@@ -98,6 +98,20 @@ class AppStrings {
   String get noOrders => _t('noOrders');
   String get signInToContinue => _t('signInToContinue');
 
+  // ------------------------------------------- product options & campuses
+  /// "Chagua Size" — shown when Add to cart is tapped before a choice.
+  String chooseOption(String name) =>
+      _t('chooseOption').replaceAll('{name}', name);
+  String get deliverToCampus => _t('deliverToCampus');
+  String get regularAddress => _t('regularAddress');
+  String get chooseCampus => _t('chooseCampus');
+  String get searchCampus => _t('searchCampus');
+  String get noCampusFound => _t('noCampusFound');
+  String get hostelBlockRoom => _t('hostelBlockRoom');
+  String get hostelBlockRoomHint => _t('hostelBlockRoomHint');
+  String get requiredField => _t('requiredField');
+  String get campusDelivery => _t('campusDelivery');
+
   // ---------------------------------------------------------------- onboard
   String get selectYourCountry => _t('selectYourCountry');
   String get selectYourCity => _t('selectYourCity');
@@ -205,6 +219,16 @@ class AppStrings {
 
   static const Map<String, Map<String, String>> _tables = {
     'en': {
+      'chooseOption': 'Choose {name}',
+      'deliverToCampus': 'Deliver to my campus',
+      'regularAddress': 'Regular address',
+      'chooseCampus': 'Choose your campus',
+      'searchCampus': 'Search university or college',
+      'noCampusFound': 'No campus matches that search',
+      'hostelBlockRoom': 'Hostel, block and room',
+      'hostelBlockRoomHint': 'e.g. Hall 5, Block B, Room 12',
+      'requiredField': 'Required',
+      'campusDelivery': 'Campus delivery',
       'appName': 'Direct2Kariakoo',
       'brandShort': 'D2K',
       'continue': 'Continue',
@@ -349,6 +373,16 @@ class AppStrings {
       'nothingHere': 'Nothing here yet',
     },
     'sw': {
+      'chooseOption': 'Chagua {name}',
+      'deliverToCampus': 'Peleka chuoni',
+      'regularAddress': 'Anwani ya kawaida',
+      'chooseCampus': 'Chagua chuo',
+      'searchCampus': 'Tafuta chuo',
+      'noCampusFound': 'Hakuna chuo kinacholingana',
+      'hostelBlockRoom': 'Hosteli, block na chumba',
+      'hostelBlockRoomHint': 'mf. Hall 5, Block B, Chumba 12',
+      'requiredField': 'Inahitajika',
+      'campusDelivery': 'Usafirishaji chuoni',
       'appName': 'Direct2Kariakoo',
       'brandShort': 'D2K',
       'continue': 'Endelea',
@@ -491,6 +525,16 @@ class AppStrings {
       'orderPlaced': 'Oda imewekwa',
     },
     'fr': {
+      'chooseOption': 'Choisissez {name}',
+      'deliverToCampus': 'Livrer sur mon campus',
+      'regularAddress': 'Adresse classique',
+      'chooseCampus': 'Choisissez votre campus',
+      'searchCampus': 'Rechercher une université',
+      'noCampusFound': 'Aucun campus trouvé',
+      'hostelBlockRoom': 'Résidence, bloc et chambre',
+      'hostelBlockRoomHint': 'ex. Hall 5, Bloc B, Chambre 12',
+      'requiredField': 'Obligatoire',
+      'campusDelivery': 'Livraison campus',
       'appName': 'Direct2Kariakoo',
       'brandShort': 'D2K',
       'continue': 'Continuer',
@@ -632,6 +676,16 @@ class AppStrings {
       'nothingHere': 'Rien ici',
     },
     'zh': {
+      'chooseOption': '请选择{name}',
+      'deliverToCampus': '送到我的校园',
+      'regularAddress': '普通地址',
+      'chooseCampus': '选择校园',
+      'searchCampus': '搜索大学或学院',
+      'noCampusFound': '没有匹配的校园',
+      'hostelBlockRoom': '宿舍、楼栋和房间',
+      'hostelBlockRoomHint': '例如 Hall 5, Block B, Room 12',
+      'requiredField': '必填',
+      'campusDelivery': '校园配送',
       'appName': 'Direct2Kariakoo',
       'brandShort': 'D2K',
       'continue': '继续',

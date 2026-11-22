@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Wallet;
 use App\Models\CartItem;
 use App\Services\AzamPayClient;
+use App\Support\ProductOptions;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,9 +27,14 @@ class PaymentController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'items.*.options' => 'sometimes|nullable',
             'phone' => 'required|string',
             'provider' => 'required|string',
         ]);
+
+        // Each line's chosen options ({"Size": "M"}), checked against the
+        // product before anything is written: a missing size is a 422.
+        $items = $this->withValidatedOptions($request->items);
 
         $user = $request->user();
         $externalId = (string) Str::uuid();
@@ -43,7 +49,7 @@ class PaymentController extends Controller
 
             // Group items by vendor
             $vendorGroups = [];
-            foreach ($request->items as $item) {
+            foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $vendorGroups[$product->vendor_id][] = $item;
             }
@@ -59,7 +65,7 @@ class PaymentController extends Controller
                     $total = $product->new_price * $item['quantity'];
                     $grandTotal += $total;
 
-                    $order = Order::create([
+                    $order = Order::create($this->withOptions([
                         'reference'        => $reference,
                         'user_id'          => $user->id,
                         'vendor_id'        => $product->vendor_id,
@@ -74,7 +80,7 @@ class PaymentController extends Controller
                         'payment_method'   => 'mobile_money',
                         'payment_provider' => $request->provider,
                         'status'           => 'pending',
-                    ]);
+                    ], $item['options']));
 
                     // The stock was checked above but never reduced, so items
                     // could be oversold indefinitely.
@@ -108,6 +114,35 @@ class PaymentController extends Controller
             Log::error('Checkout Error:', ['error' => $e->getMessage()]);
             return response()->json(['error' => $e->getMessage()], 400);
         }
+    }
+
+    /**
+     * Attach each line's validated options (null when the product has none).
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    private function withValidatedOptions(array $items): array
+    {
+        foreach ($items as $index => $item) {
+            $product = Product::findOrFail($item['product_id']);
+            $items[$index]['options'] = ProductOptions::validate(
+                $product,
+                $item['options'] ?? null,
+                "items.{$index}.options",
+            );
+        }
+
+        return $items;
+    }
+
+    /** Add options to an order row, when there are any and the column exists. */
+    private function withOptions(array $row, ?array $options): array
+    {
+        if ($options !== null && ProductOptions::ordersSupportOptions()) {
+            $row['options'] = $options;
+        }
+
+        return $row;
     }
 
     /**
@@ -162,9 +197,12 @@ class PaymentController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'items.*.options' => 'sometimes|nullable',
             'total' => 'required|numeric|min:1',
             'reference' => 'nullable|string',
         ]);
+
+        $items = $this->withValidatedOptions($request->items);
 
         DB::beginTransaction();
 
@@ -173,7 +211,7 @@ class PaymentController extends Controller
             $vendorGroups = [];
 
             // Group products by vendor
-            foreach ($request->items as $item) {
+            foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $vendorGroups[$product->vendor_id][] = $item;
             }
@@ -183,7 +221,7 @@ class PaymentController extends Controller
                     $product = Product::lockForUpdate()->findOrFail($item['product_id']);
                     $total = $product->new_price * $item['quantity'];
 
-                    $order = Order::create([
+                    $order = Order::create($this->withOptions([
                         'user_id'        => $user->id,
                         'vendor_id'      => $vendorId,
                         'product_id'     => $product->id,
@@ -193,7 +231,7 @@ class PaymentController extends Controller
                         'payment_method' => 'Manual Payment',
                         'reference'      => $request->reference ?? 'ManualConfirm',
                         'status'         => 'pending',
-                    ]);
+                    ], $item['options']));
 
                     $product->decrement('stock', $item['quantity']);
 

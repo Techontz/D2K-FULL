@@ -425,11 +425,20 @@ class CatalogController extends Controller
      */
     private function bannerGroups(): array
     {
-        $groups = Banner::query()
-            ->live()
-            ->whereIn('placement', ['hero', 'hero_side', 'promo'])
-            ->get()
-            ->groupBy('placement');
+        // A database that predates the placement/scheduling columns still has
+        // its banners: every active one goes to the hero carousel, as the old
+        // storefront showed them, instead of the homepage failing outright.
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('banners', 'placement')) {
+            $groups = collect([
+                'hero' => Banner::query()->where('is_active', true)->orderBy('id')->get(),
+            ]);
+        } else {
+            $groups = Banner::query()
+                ->live()
+                ->whereIn('placement', ['hero', 'hero_side', 'promo'])
+                ->get()
+                ->groupBy('placement');
+        }
 
         $shape = fn (Banner $banner) => [
             'id'           => $banner->id,

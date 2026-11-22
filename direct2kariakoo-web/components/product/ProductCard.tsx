@@ -4,6 +4,7 @@ import { SmartImage } from "@/components/ui/SmartImage";
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
 import type { ProductCard as ProductCardModel } from "@/lib/types";
@@ -30,6 +31,7 @@ export function ProductCard({
   const { add, quantityOf } = useCart();
   const wishlist = useWishlist();
   const [added, setAdded] = useState(false);
+  const router = useRouter();
 
   const saved = wishlist.has(product.id);
   const inCart = quantityOf(product.id);
@@ -40,6 +42,14 @@ export function ProductCard({
     event.preventDefault();
     event.stopPropagation();
     if (!product.in_stock) return;
+
+    // A product with sizes/colours cannot be added blind — send the shopper
+    // to the product page to choose, rather than putting an unpickable line
+    // in the cart that checkout would then refuse.
+    if (product.has_options) {
+      router.push(href);
+      return;
+    }
 
     add(product, 1);
     setAdded(true);
@@ -102,7 +112,11 @@ export function ProductCard({
             type="button"
             onClick={handleAdd}
             disabled={!product.in_stock}
-            aria-label={`Add ${product.name} to cart`}
+            aria-label={
+              product.has_options
+                ? t("options.chooseOnProduct", { name: product.name })
+                : `Add ${product.name} to cart`
+            }
             className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[color:var(--color-ink)] shadow-[var(--shadow-card)] ring-1 ring-[color:var(--color-line)] transition-all hover:bg-[color:var(--color-action)] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[color:var(--color-surface)] disabled:hover:text-[color:var(--color-ink)]"
           >
             {added ? <CheckIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}

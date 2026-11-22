@@ -1,7 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { ProductCard } from "../types";
+import type { CartLine, ProductCard, SelectedOptions } from "../types";
+import { lineKey, normaliseOptions } from "../options";
+
+export type { CartLine } from "../types";
 
 /**
  * Shopping cart.
@@ -10,23 +13,26 @@ import type { ProductCard } from "../types";
  * point of browsing without a forced login. The cart therefore lives in
  * browser storage and is only sent to the server at checkout, when the
  * shopper has authenticated. Nothing here requires a session.
+ *
+ * A line is a product *plus the options chosen for it*: the same shoe in
+ * size 40 and size 42 is two lines. Lines are addressed by `lineKey()`, which
+ * for a product without options is just its id — so carts saved before
+ * options existed keep working unchanged.
  */
-
-export interface CartLine {
-  product: ProductCard;
-  quantity: number;
-}
 
 interface CartContextValue {
   lines: CartLine[];
   count: number;
   subtotal: number;
   ready: boolean;
-  add(product: ProductCard, quantity?: number): void;
-  setQuantity(productId: number, quantity: number): void;
-  remove(productId: number): void;
+  add(product: ProductCard, quantity?: number, options?: SelectedOptions | null): void;
+  /** `key` is `lineKey(product.id, line.options)`. */
+  setQuantity(key: string, quantity: number): void;
+  remove(key: string): void;
   clear(): void;
+  /** Any line of this product, whatever options it carries. */
   has(productId: number): boolean;
+  /** Units of this product across all of its option combinations. */
   quantityOf(productId: number): number;
 }
 
@@ -40,7 +46,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setLines(JSON.parse(raw));
+      if (raw) {
+        // Older saved carts have no `options`; normalising here means every
+        // line in memory has the same shape whatever version stored it.
+        const stored = JSON.parse(raw) as CartLine[];
+        setLines(
+          Array.isArray(stored)
+            ? stored
+                .filter((line) => line && line.product && typeof line.product.id === "number")
+                .map((line) => ({ ...line, options: normaliseOptions(line.options) }))
+            : [],
+        );
+      }
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -54,37 +71,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
   }, [lines, ready]);
 
-  const add = useCallback((product: ProductCard, quantity = 1) => {
-    setLines((current) => {
-      const existing = current.find((line) => line.product.id === product.id);
+  const add = useCallback(
+    (product: ProductCard, quantity = 1, options: SelectedOptions | null = null) => {
+      const chosen = normaliseOptions(options);
+      const key = lineKey(product.id, chosen);
 
-      if (!existing) {
-        // Never let a shopper add more than the vendor actually has.
-        return [...current, { product, quantity: clamp(quantity, product.stock) }];
-      }
+      setLines((current) => {
+        const existing = current.find((line) => keyOf(line) === key);
 
-      return current.map((line) =>
-        line.product.id === product.id
-          ? { ...line, quantity: clamp(line.quantity + quantity, product.stock) }
-          : line
-      );
-    });
-  }, []);
+        if (!existing) {
+          // Never let a shopper add more than the vendor actually has.
+          return [...current, { product, quantity: clamp(quantity, product.stock), options: chosen }];
+        }
 
-  const setQuantity = useCallback((productId: number, quantity: number) => {
+        return current.map((line) =>
+          keyOf(line) === key
+            ? { ...line, quantity: clamp(line.quantity + quantity, product.stock) }
+            : line
+        );
+      });
+    },
+    []
+  );
+
+  const setQuantity = useCallback((key: string, quantity: number) => {
     setLines((current) =>
       quantity <= 0
-        ? current.filter((line) => line.product.id !== productId)
+        ? current.filter((line) => keyOf(line) !== key)
         : current.map((line) =>
-            line.product.id === productId
+            keyOf(line) === key
               ? { ...line, quantity: clamp(quantity, line.product.stock) }
               : line
           )
     );
   }, []);
 
-  const remove = useCallback((productId: number) => {
-    setLines((current) => current.filter((line) => line.product.id !== productId));
+  const remove = useCallback((key: string) => {
+    setLines((current) => current.filter((line) => keyOf(line) !== key));
   }, []);
 
   const clear = useCallback(() => setLines([]), []);
@@ -106,7 +129,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       remove,
       clear,
       has: (id) => lines.some((line) => line.product.id === id),
-      quantityOf: (id) => lines.find((line) => line.product.id === id)?.quantity ?? 0,
+      quantityOf: (id) =>
+        lines.reduce((sum, line) => (line.product.id === id ? sum + line.quantity : sum), 0),
     };
   }, [lines, ready, add, setQuantity, remove, clear]);
 
@@ -117,6 +141,11 @@ export function useCart(): CartContextValue {
   const context = useContext(CartContext);
   if (!context) throw new Error("useCart must be used inside <CartProvider>");
   return context;
+}
+
+/** The identity a line is addressed by. */
+export function keyOf(line: CartLine): string {
+  return lineKey(line.product.id, line.options);
 }
 
 function clamp(quantity: number, stock: number): number {

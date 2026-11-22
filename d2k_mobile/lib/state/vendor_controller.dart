@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/api_client.dart';
+import '../domain/models/product.dart';
 
 /// Seller-side state for the mobile vendor experience.
 ///
@@ -173,6 +174,7 @@ class VendorOrderLine {
     this.address,
     this.productName,
     this.productImage,
+    this.options = const {},
   });
 
   final int id;
@@ -185,6 +187,11 @@ class VendorOrderLine {
   final String? address;
   final String? productName;
   final String? productImage;
+
+  /// What the customer chose — size, colour… — so the right one is packed.
+  final Map<String, String> options;
+
+  String get optionsLabel => describeChosenOptions(options);
 
   bool get isOpen => status != 'completed' && status != 'cancelled';
 
@@ -218,6 +225,7 @@ class VendorOrderLine {
       address: json['address'] as String?,
       productName: product?['name'] as String?,
       productImage: product?['image'] as String?,
+      options: parseChosenOptions(json['options']),
     );
   }
 }

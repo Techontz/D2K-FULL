@@ -1,4 +1,5 @@
 import '../domain/models/commerce.dart';
+import '../domain/models/product.dart';
 import 'api_client.dart';
 
 /// Addresses, orders and checkout, mapped from the same `/shop/*` endpoints
@@ -31,6 +32,15 @@ class RemoteShopSource {
     return _address(body['address'] as Map<String, dynamic>);
   }
 
+  /// Campuses D2K delivers to — active only, in the admin's order.
+  Future<List<Campus>> campuses() async {
+    final body = await _api.get('/shop/campuses');
+    return [
+      for (final raw in (body['campuses'] as List? ?? const []))
+        if (raw is Map<String, dynamic>) Campus.fromJson(raw),
+    ];
+  }
+
   Future<void> deleteAddress(String id) => _api.delete('/shop/addresses/$id');
 
   Future<void> makeDefaultAddress(String id) =>
@@ -56,9 +66,27 @@ class RemoteShopSource {
       phone: clean(json['phone']),
       details: clean(json['details']),
       formatted: clean(json['formatted']),
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
+      latitude: _double(json['latitude']),
+      longitude: _double(json['longitude']),
+      campusId: _campus(json)?.$1,
+      campusName: _campus(json)?.$2,
     );
+  }
+
+  /// Laravel serialises decimal columns as strings; accept either.
+  static double? _double(Object? v) =>
+      v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+
+  /// `campus: {id, name, short_name}` on campus addresses; null otherwise.
+  static (String, String)? _campus(Map<String, dynamic> json) {
+    final campus = json['campus'];
+    if (campus is Map && campus['id'] != null) {
+      final short = '${campus['short_name'] ?? ''}'.trim();
+      final name = '${campus['name'] ?? ''}'.trim();
+      return ('${campus['id']}', short.isNotEmpty && short != 'null' ? short : name);
+    }
+    if (json['campus_id'] != null) return ('${json['campus_id']}', '');
+    return null;
   }
 
   /* ---------------------------------------------------------------- */
@@ -85,12 +113,21 @@ class RemoteShopSource {
     required String deliveryAddress,
     required String customerPhone,
     String paymentMethod = 'lipa_namba',
+    String? addressId,
   }) async {
     final body = await _api.post('/shop/orders', {
       'items': [
         for (final item in items)
-          {'product_id': int.tryParse(item.productId) ?? item.productId, 'quantity': item.quantity},
+          {
+            'product_id': int.tryParse(item.productId) ?? item.productId,
+            'quantity': item.quantity,
+            // Size, colour… exactly as chosen; omitted for plain products.
+            if (item.options.isNotEmpty) 'options': item.options,
+          },
       ],
+      // The saved address the order is going to, so the server can apply
+      // that address's campus delivery fee. Ignored by servers without it.
+      if (addressId != null) 'address_id': int.tryParse(addressId) ?? addressId,
       'delivery_address': deliveryAddress,
       'customer_phone': customerPhone,
       'payment_method': paymentMethod,
@@ -131,15 +168,23 @@ class RemoteShopSource {
       price: (json['price'] as num?)?.toDouble() ?? 0,
       total: (json['total'] as num?)?.toDouble() ?? 0,
       status: '${json['status'] ?? ''}',
+      options: parseChosenOptions(json['options']),
     );
   }
 }
 
 class OrderLineRequest {
-  const OrderLineRequest({required this.productId, required this.quantity});
+  const OrderLineRequest({
+    required this.productId,
+    required this.quantity,
+    this.options = const {},
+  });
 
   final String productId;
   final int quantity;
+
+  /// Option name -> chosen value, e.g. `{"Size": "M"}`.
+  final Map<String, String> options;
 }
 
 /// What the app sends when saving an address.
@@ -155,6 +200,7 @@ class AddressDraft {
     this.latitude,
     this.longitude,
     this.isDefault = false,
+    this.campusId,
   });
 
   final String fullName;
@@ -168,6 +214,10 @@ class AddressDraft {
   final double? longitude;
   final bool isDefault;
 
+  /// "Deliver to my campus": the campus id, with the hostel/block/room in
+  /// [details]. Null for an ordinary address.
+  final String? campusId;
+
   Map<String, dynamic> toJson() => {
         'full_name': fullName,
         'phone': phone,
@@ -179,5 +229,8 @@ class AddressDraft {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         'is_default': isDefault,
+        // Always sent, null included, so turning a campus address back into
+        // an ordinary one clears the campus on the server.
+        'campus_id': campusId == null ? null : (int.tryParse(campusId!) ?? campusId),
       };
 }

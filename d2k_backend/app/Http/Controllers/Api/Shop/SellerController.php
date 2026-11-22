@@ -148,6 +148,9 @@ class SellerController extends Controller
                 'type'    => $attribute->input_type ?? 'text',
                 'unit'    => $attribute->unit,
                 'options' => $attribute->values->pluck('value')->values(),
+                // The customer picks one of the values the seller ticks here
+                // (size, colour…), so seller UIs label it "Customers choose one".
+                'is_variant' => (bool) $attribute->is_variant,
             ]);
 
         return response()->json(['attributes' => $attributes]);
